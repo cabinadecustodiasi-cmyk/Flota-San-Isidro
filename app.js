@@ -1,6 +1,6 @@
 // CONFIGURACIÓN DE SUPABASE REAL Y VERIFICADA
 const SUPABASE_URL = "https://toqauhxdcyggnsejjijk.supabase.co"; 
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvcWF1aHhkY3lnZ25zZWpqaWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDU4MzQsImV4cCI6MjA5NjA4MTgzNH0.Eb2u6O10ulBv20OoKvwaE64aqwEQzU80GnkbNd8Tp0I"; 
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvcWF1aHxdcyggnsejjijkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDU4MzQsImV4cCI6MjA5NjA4MTgzNH0.Eb2u6O10ulBv20OoKvwaE64aqwEQzU80GnkbNd8Tp0I"; 
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -234,7 +234,7 @@ async function abrirPanelReporteVehiculo(auto) {
 }
 
 // ==========================================
-// SECCIÓN: LÓGICA DE DOCUMENTACIÓN (COLUMNA NATIVA 'documentos')
+// SECCIÓN: LÓGICA DE DOCUMENTACIÓN (CORREGIDA PARA ARRAY _TEXT DE POSTGRES)
 // ==========================================
 async function subirDocumentacionAuto() {
     const nombreTipo = document.getElementById('doc-nombre-tipo').value.trim();
@@ -249,7 +249,7 @@ async function subirDocumentacionAuto() {
     const extension = file.name.split('.').pop();
     const nombreArchivoStorage = `docs_${vehiculoSeleccionado.id}_${Date.now()}.${extension}`;
 
-    // Subida al bucket 'flota'
+    // 1. Subida al bucket 'flota'
     const { data: uploadData, error: errorUpload } = await supabaseClient.storage
         .from('flota')
         .upload(nombreArchivoStorage, file);
@@ -261,34 +261,37 @@ async function subirDocumentacionAuto() {
 
     const { data: linkPublico } = supabaseClient.storage.from('flota').getPublicUrl(nombreArchivoStorage);
 
-    // Interpretamos los documentos existentes
+    // 2. Interpretamos los documentos existentes de forma segura
     let listaDocumentos = [];
     if (vehiculoSeleccionado.documentos) {
-        try {
-            listaDocumentos = JSON.parse(vehiculoSeleccionado.documentos);
-            if (!Array.isArray(listaDocumentos)) listaDocumentos = [];
-        } catch (e) {
-            listaDocumentos = [];
+        if (Array.isArray(vehiculoSeleccionado.documentos)) {
+            listaDocumentos = vehiculoSeleccionado.documentos;
+        } else {
+            try {
+                const parseado = JSON.parse(vehiculoSeleccionado.documentos);
+                listaDocumentos = Array.isArray(parseado) ? parseado : [vehiculoSeleccionado.documentos];
+            } catch (e) {
+                listaDocumentos = [vehiculoSeleccionado.documentos];
+            }
         }
     }
 
-    // Sumamos el nuevo documento al array
-    listaDocumentos.push({
-        nombre: nombreTipo,
-        url: linkPublico.publicUrl
-    });
+    // Estructura de texto plano limpia para no romper la sintaxis _text de postgres
+    const nuevoElemento = `${nombreTipo} || ${linkPublico.publicUrl}`;
+    listaDocumentos.push(nuevoElemento);
 
-    // Guardamos la actualización en la columna 'documentos' de la tabla 'vehiculos'
+    // 3. Guardamos pasando el Array plano nativo directo
     const { error: errorUpdate } = await supabaseClient
         .from('vehiculos')
-        .update({ documentos: JSON.stringify(listaDocumentos) })
+        .update({ documentos: listaDocumentos })
         .eq('id', vehiculoSeleccionado.id);
 
     if (errorUpdate) {
+        console.error("Detalle error documentos:", errorUpdate);
         alert("Error al guardar el documento en la base de datos: " + errorUpdate.message);
     } else {
         alert("Documento guardado con éxito.");
-        vehiculoSeleccionado.documentos = JSON.stringify(listaDocumentos);
+        vehiculoSeleccionado.documentos = listaDocumentos;
         document.getElementById('doc-nombre-tipo').value = '';
         archivoInput.value = '';
         mostrarDocumentosAuto();
@@ -299,33 +302,50 @@ function mostrarDocumentosAuto() {
     const contenedor = document.getElementById('documentos-visor-lista');
     if (!contenedor) return;
 
-    let documentos = [];
-    if (vehiculoSeleccionado.documentos) {
-        try {
-            documentos = JSON.parse(vehiculoSeleccionado.documentos);
-        } catch (e) {
-            documentos = [];
-        }
+    let documentosRaw = vehiculoSeleccionado.documentos || [];
+    
+    if (typeof documentosRaw === 'string') {
+        try { documentosRaw = JSON.parse(documentosRaw); } catch(e) { documentosRaw = [documentosRaw]; }
+    }
+    if (!Array.isArray(documentosRaw)) {
+        documentosRaw = [documentosRaw];
     }
 
-    if (!Array.isArray(documentos) || documentos.length === 0) {
+    const documentos = documentosRaw.filter(d => d && String(d).trim() !== "");
+
+    if (documentos.length === 0) {
         contenedor.innerHTML = `<p style="color: #64748b; font-size: 0.85rem; margin:0;">No hay documentos digitales cargados para este auto.</p>`;
         return;
     }
 
     contenedor.innerHTML = '';
     documentos.forEach(doc => {
+        let nombre = "Documento";
+        let url = "#";
+
+        if (typeof doc === 'string' && doc.includes(' || ')) {
+            const partes = doc.split(' || ');
+            nombre = partes[0];
+            url = partes[1];
+        } else if (typeof doc === 'object' && doc !== null && doc.nombre && doc.url) {
+            nombre = doc.nombre;
+            url = doc.url;
+        } else {
+            url = String(doc);
+            nombre = url.split('/').pop().split('_').pop() || "Ver Documento";
+        }
+
         const link = document.createElement('a');
-        link.href = doc.url;
+        link.href = url;
         link.target = '_blank';
         link.style.cssText = "background: #334155; color: #fbbf24; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: flex; align-items: center; gap: 5px; font-weight: bold; border: 1px solid #475569;";
-        link.innerHTML = `<span class="material-icons" style="font-size:1rem;">description</span> ${doc.nombre}`;
+        link.innerHTML = `<span class="material-icons" style="font-size:1rem;">description</span> ${nombre}`;
         contenedor.appendChild(link);
     });
 }
 
 // ==========================================
-// SECCIÓN: LÓGICA DE SERVICES (COLUMNA NATIVA 'services')
+// SECCIÓN: LÓGICA DE SERVICES (COLUMNA NATIVA 'services' JSONB)
 // ==========================================
 async function registrarServiceVehiculo() {
     const tarea = document.getElementById('srv-tarea').value.trim();
@@ -344,7 +364,6 @@ async function registrarServiceVehiculo() {
             : (typeof vehiculoSeleccionado.services === 'string' ? JSON.parse(vehiculoSeleccionado.services) : []);
     }
 
-    // Creamos el nuevo registro
     const nuevoService = {
         tarea_realizada: tarea,
         kilometraje: km,
@@ -353,9 +372,8 @@ async function registrarServiceVehiculo() {
         fecha: new Date().toLocaleDateString('es-AR')
     };
 
-    listaServices.unshift(nuevoService); // Lo agregamos al principio del historial
+    listaServices.unshift(nuevoService);
 
-    // Actualizamos la columna jsonb 'services'
     const { error } = await supabaseClient
         .from('vehiculos')
         .update({ services: listaServices })
@@ -407,7 +425,7 @@ function mostrarServicesAuto() {
 }
 
 // ==========================================
-// REPORTE DE JORNADAS (CORREGIDO CON PATENTE Y CHOFER OBLIGATORIOS)
+// REPORTE DE JORNADAS (CON PATENTE Y CHOFER OBLIGATORIOS)
 // ==========================================
 async function enviarReporte() {
     const tipo = document.getElementById('reporte-tipo').value;
@@ -439,7 +457,7 @@ async function enviarReporte() {
         }
     }
 
-    // CORRECCIÓN CRÍTICA: Se inyectan de forma obligatoria las columnas 'patente' y 'chofer'
+    // Enviamos explícitamente los campos NOT NULL requeridos por la BD
     const { error } = await supabaseClient.from('reportes_jornadas').insert([{
         tipo,
         kilometraje,
@@ -447,8 +465,8 @@ async function enviarReporte() {
         novedades: novedades || null,
         fotos_perimetro: JSON.stringify(urlsFotos),
         vehiculo_id: vehiculoSeleccionado.id,
-        patente: vehiculoSeleccionado.patente, // Requerido por la base de datos
-        chofer: usuarioActual?.email || "Chofer Anónimo" // Requerido por la base de datos
+        patente: vehiculoSeleccionado.patente,
+        chofer: usuarioActual?.email || "Chofer Anónimo"
     }]);
 
     if (error) {
@@ -456,7 +474,7 @@ async function enviarReporte() {
     } else {
         alert("Reporte guardado con éxito.");
         
-        // Actualizamos dinámicamente el kilometraje en la tabla vehiculos para mantener el estado real
+        // Sincroniza automáticamente el km general del vehículo
         await supabaseClient.from('vehiculos').update({ km_actual: kilometraje }).eq('id', vehiculoSeleccionado.id);
         
         document.getElementById('reporte-km').value = '';
@@ -476,7 +494,7 @@ async function agregarVehiculo() {
         return;
     }
 
-    const { error } = await supabaseClient.from('vehiculos').insert([{ patente, modelo, documentos: "[]", services: [] }]);
+    const { error } = await supabaseClient.from('vehiculos').insert([{ patente, modelo, documentos: [], services: [] }]);
 
     if (error) {
         alert("Error al guardar auto: " + error.message);
