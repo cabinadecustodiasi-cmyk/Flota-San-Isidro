@@ -1,8 +1,8 @@
-// CONFIGURACIÓN DE SUPABASE REAL Y VERIFICADA (VARIABLE CORREGIDA PARA EVITAR CONFLICTOS)
+// CONFIGURACIÓN DE SUPABASE REAL Y VERIFICADA
 const SUPABASE_URL = "https://toqauhxdcyggnsejjijk.supabase.co"; 
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvcWF1aHhkY3lnZ25zZWpqaWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDU4MzQsImV4cCI6MjA5NjA4MTgzNH0.Eb2u6O10ulBv20OoKvwaE64aqwEQzU80GnkbNd8Tp0I"; 
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvcWF1hHhkY3lnZ25zZWpqaWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDU4MzQsImV4cCI6MjA5NjA4MTgzNH0.Eb2u6O10ulBv20OoKvwaE64aqwEQzU80GnkbNd8Tp0I"; 
 
-// Usamos supabaseClient (con un nombre distinto) para que no choque con la librería global de Supabase
+// Usamos supabaseClient para conectar con la base de datos
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // VARIABLES GLOBALES DE CONTROL
@@ -18,14 +18,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById('btn-agregar-vehiculo').addEventListener('click', agregarVehiculo);
     document.getElementById('btn-enviar-reporte').addEventListener('click', enviarReporte);
 
-    // Chequear si ya hay una sesión guardada del teléfono/PC
+    // Chequear si ya hay una sesión guardada en el dispositivo
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (user) {
         configurarSesionActiva(user);
     }
 });
 
-// GESTIÓN DE ACCESO AUTOMÁTICO (LOGIN O REGISTRO SI NO EXISTE)
+// GESTIÓN DE ACCESO AUTOMÁTICO (LOGIN O REGISTRO)
 async function manejarAccesoUsuario() {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
@@ -40,25 +40,24 @@ async function manejarAccesoUsuario() {
         return;
     }
 
-    // Primero intentamos iniciar sesión de forma normal
+    // Intento de inicio de sesión normal
     const { data: loginData, error: loginError } = await supabaseClient.auth.signInWithPassword({ email, password });
 
     if (!loginError && loginData && loginData.user) {
-        // Cuenta existente: ingresa directo
         configurarSesionActiva(loginData.user);
         return;
     }
 
-    // Si el error es que el usuario no existe o credenciales inválidas en cuenta nueva, la creamos automáticamente
+    // Registro automático si la cuenta es nueva
     if (loginError && (loginError.message.includes("Invalid login credentials") || loginError.status === 400 || loginError.status === 404)) {
-        console.log("Usuario no encontrado, registrando chofer nuevo de manera automática...");
+        console.log("Usuario no encontrado, registrando chofer nuevo...");
         
         const { data: signupData, error: signupError } = await supabaseClient.auth.signUp({
             email: email,
             password: password,
             options: {
                 data: {
-                    rol: 'chofer' // Asignación automática de rol por defecto
+                    rol: 'chofer'
                 }
             }
         });
@@ -69,11 +68,10 @@ async function manejarAccesoUsuario() {
         }
 
         if (signupData && signupData.user) {
-            alert("¡Cuenta de chofer registrada con éxito! Ingresando al panel de control...");
+            alert("¡Cuenta de chofer registrada con éxito! Ingresando...");
             configurarSesionActiva(signupData.user);
         }
     } else {
-        // Cualquier otro error de red inesperado
         alert("Error de acceso: " + loginError.message);
     }
 }
@@ -84,15 +82,14 @@ function configurarSesionActiva(user) {
     document.getElementById('btn-logout').style.display = 'block';
     document.getElementById('menu-navegacion').style.display = 'flex';
     
-    // Filtro de Seguridad por Rol en los Metadatos
     const rolUsuario = user?.user_metadata?.rol || 'chofer';
     const btnNavAdmin = document.getElementById('btn-nav-admin');
 
     if (rolUsuario === 'admin') {
-        if (btnNavAdmin) btnNavAdmin.style.display = 'flex'; // Muestra solapa Admin si corresponde
-        cargarReportesParaAdmin(); // Carga el historial agrupado por auditoría
+        if (btnNavAdmin) btnNavAdmin.style.display = 'flex';
+        cargarReportesParaAdmin();
     } else {
-        if (btnNavAdmin) btnNavAdmin.style.display = 'none'; // Oculta solapa Admin al chofer común
+        if (btnNavAdmin) btnNavAdmin.style.display = 'none';
     }
 
     cambiarVista('vista-flota');
@@ -134,17 +131,16 @@ async function cargarVehiculos() {
         const item = document.createElement('div');
         item.className = 'card-vehiculo';
         
-        // Obtenemos el rol para saber si le dibujamos el botón de eliminar auto
         const rolUsuario = usuarioActual?.user_metadata?.rol || 'chofer';
         let botonEliminarAutoHtml = '';
         
         if (rolUsuario === 'admin') {
             botonEliminarAutoHtml = `
-                <button class="btn-eliminar-auto" style="position: absolute; top: 5px; right: 5px; background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px;" title="Eliminar Vehículo">
+                <button class="btn-eliminar-auto" style="position: absolute; top: 5px; right: 5px; background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px;" title="Eliminar Vehiculo">
                     <span class="material-icons" style="font-size: 1.2rem;">delete</span>
                 </button>
             `;
-            item.style.position = 'relative'; // Necesario para posicionar el tachito arriba a la derecha
+            item.style.position = 'relative';
         }
 
         item.innerHTML = `
@@ -154,12 +150,11 @@ async function cargarVehiculos() {
             <div style="font-size: 0.8rem; color: var(--texto-gris);">${auto.modelo || ''}</div>
         `;
 
-        // Si hace clic en el tacho, borra. Si hace clic en el resto de la tarjeta, abre reporte.
         const botonTacho = item.querySelector('.btn-eliminar-auto');
         if (botonTacho) {
             botonTacho.addEventListener('click', (e) => {
-                e.stopPropagation(); // Evita que se abra la vista de reporte al querer borrar
-                eliminarVehículoCompleto(auto.id, auto.patente);
+                e.stopPropagation();
+                eliminarVehiculoCompleto(auto.id, auto.patente);
             });
         }
 
@@ -194,12 +189,11 @@ async function agregarVehiculo() {
     }
 }
 
-// ELIMINAR VEHÍCULO Y SUS REPORTES ASOCIADOS (NUEVA FUNCIÓN ADMIN)
-async function eliminarVehículoCompleto(idVehiculo, patente) {
-    const confirmar = confirm(`¿Estás seguro de eliminar el vehículo ${patente}?\nSe borrarán de forma PERMANENTE todos los reportes de jornadas asociados a este auto.`);
+// ELIMINAR VEHÍCULO Y REPORTES (ADMIN)
+async function eliminarVehiculoCompleto(idVehiculo, patente) {
+    const confirmar = confirm(`¿Estás seguro de eliminar el vehículo ${patente}?\nSe borrarán de forma PERMANENTE todos los reportes asociados.`);
     if (!confirmar) return;
 
-    // 1. Borramos primero los reportes para no violar la integridad referencial
     const { error: errorReportes } = await supabaseClient
         .from('reportes_jornadas')
         .delete()
@@ -210,7 +204,6 @@ async function eliminarVehículoCompleto(idVehiculo, patente) {
         return;
     }
 
-    // 2. Ahora sí eliminamos el vehículo de la lista
     const { error: errorVehiculo } = await supabaseClient
         .from('vehiculos')
         .delete()
@@ -221,12 +214,11 @@ async function eliminarVehículoCompleto(idVehiculo, patente) {
     } else {
         alert(`Vehículo ${patente} eliminado correctamente.`);
         cargarVehiculos();
-        // Si estamos parados en la vista de admin, refrescamos el historial
         if (window.vistaActual === 'vista-admin') cargarReportesParaAdmin();
     }
 }
 
-// ELIMINAR UN REPORTE INDIVIDUAL (NUEVA FUNCIÓN ADMIN)
+// ELIMINAR UN REPORTE INDIVIDUAL (ADMIN)
 async function eliminarReporteIndividual(idReporte) {
     const confirmar = confirm("¿Estás seguro de eliminar este reporte de jornada de forma permanente?");
     if (!confirmar) return;
@@ -240,11 +232,11 @@ async function eliminarReporteIndividual(idReporte) {
         alert("Error al eliminar el reporte: " + error.message);
     } else {
         alert("Reporte eliminado.");
-        cargarReportesParaAdmin(); // Recarga el panel agrupado
+        cargarReportesParaAdmin();
     }
 }
 
-// ENVIAR REPORTE DE JORNADA (CON SUBIDA DE FOTOS MULTIPLES)
+// ENVIAR REPORTE DE JORNADA (CON SUBIDA DE FOTOS AL BUCKET 'FLOTA')
 async function enviarReporte() {
     const tipo = document.getElementById('reporte-tipo').value;
     const kilometraje = parseInt(document.getElementById('reporte-km').value);
@@ -264,14 +256,16 @@ async function enviarReporte() {
             const archivo = inputFotos.files[i];
             const nombreArchivo = `${Date.now()}_${i}_${archivo.name}`;
             
+            // Subida limpia apuntando al bucket 'flota'
             const { data, error: uploadError } = await supabaseClient.storage
-                .from('perimetros')
+                .from('flota')
                 .upload(nombreArchivo, archivo);
 
             if (uploadError) {
                 console.error("Error subiendo foto:", uploadError.message);
             } else {
-                const { data: publicData } = supabaseClient.storage.from('perimetros').getPublicUrl(nombreArchivo);
+                // Generación de la URL pública correspondiente
+                const { data: publicData } = supabaseClient.storage.from('flota').getPublicUrl(nombreArchivo);
                 if (publicData?.publicUrl) {
                     urlsFotos.push(publicData.publicUrl);
                 }
@@ -299,7 +293,7 @@ async function enviarReporte() {
     }
 }
 
-// CARGAR HISTORIAL DE REPORTES AGRUPADOS POR VEHÍCULO (SOLO ADMINS)
+// CARGAR HISTORIAL DE REPORTES EN PANEL ADMIN
 async function cargarReportesParaAdmin() {
     const contenedor = document.getElementById('lista-reportes-admin');
     if (!contenedor) return;
@@ -370,7 +364,10 @@ async function cargarReportesParaAdmin() {
                     if (Array.isArray(listaFotos) && listaFotos.length > 0) {
                         fotosHtml = `<div style="display: flex; gap: 10px; margin-top: 10px; overflow-x: auto; padding-bottom: 5px;">`;
                         listaFotos.forEach(url => {
-                            fotosHtml += `<img src="${url}" alt="Perímetro" style="width: 70px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #475569; cursor: pointer;" onclick="window.open('${url}', '_blank')">`;
+                            fotosHtml += `
+                                <a href="${url}" target="_blank" style="text-decoration: none; display: inline-block;">
+                                    <img src="${url}" alt="Perimetro" style="width: 70px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #475569; display: block;" title="Clic para ampliar foto">
+                                </a>`;
                         });
                         fotosHtml += `</div>`;
                     }
@@ -403,7 +400,6 @@ async function cargarReportesParaAdmin() {
                 ${fotosHtml}
             `;
 
-            // Vincular el evento de borrado al tachito del reporte
             tarjeta.querySelector('.btn-eliminar-reporte').addEventListener('click', () => {
                 eliminarReporteIndividual(reporte.id);
             });
