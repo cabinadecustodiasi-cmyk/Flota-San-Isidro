@@ -1,8 +1,7 @@
-// CONFIGURACIÓN DE SUPABASE REAL Y VERIFICADA (KEY ORIGINAL RESTAURADA)
+// CONFIGURACIÓN DE SUPABASE REAL Y VERIFICADA
 const SUPABASE_URL = "https://toqauhxdcyggnsejjijk.supabase.co"; 
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvcWF1aHhkY3lnZ25zZWpqaWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDU4MzQsImV4cCI6MjA5NjA4MTgzNH0.Eb2u6O10ulBv20OoKvwaE64aqwEQzU80GnkbNd8Tp0I"; 
 
-// Usamos supabaseClient para conectar con la base de datos
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // VARIABLES GLOBALES DE CONTROL
@@ -12,7 +11,7 @@ window.vistaActual = 'vista-login';
 
 // EVENTOS AL CARGAR LA PÁGINA
 document.addEventListener("DOMContentLoaded", async () => {
-    // Escuchar botones de la interfaz
+    // Escuchar botones fijos de la interfaz
     document.getElementById('btn-ingresar').addEventListener('click', manejarAccesoUsuario);
     document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
     document.getElementById('btn-agregar-vehiculo').addEventListener('click', agregarVehiculo);
@@ -40,7 +39,6 @@ async function manejarAccesoUsuario() {
         return;
     }
 
-    // Intento de inicio de sesión normal
     const { data: loginData, error: loginError } = await supabaseClient.auth.signInWithPassword({ email, password });
 
     if (!loginError && loginData && loginData.user) {
@@ -48,18 +46,13 @@ async function manejarAccesoUsuario() {
         return;
     }
 
-    // Registro automático si la cuenta es nueva
     if (loginError && (loginError.message.includes("Invalid login credentials") || loginError.status === 400 || loginError.status === 404)) {
         console.log("Usuario no encontrado, registrando chofer nuevo...");
         
         const { data: signupData, error: signupError } = await supabaseClient.auth.signUp({
             email: email,
             password: password,
-            options: {
-                data: {
-                    rol: 'chofer'
-                }
-            }
+            options: { data: { rol: 'chofer' } }
         });
 
         if (signupError) {
@@ -159,15 +152,237 @@ async function cargarVehiculos() {
         }
 
         item.onclick = () => {
-            vehiculoSeleccionadoId = auto.id;
-            document.getElementById('reporte-titulo').innerText = `Reporte Unidad: ${auto.patente}`;
-            cambiarVista('vista-reporte');
+            abrirPanelReporteVehiculo(auto);
         };
         contenedor.appendChild(item);
     });
 }
 
-// AGREGAR AUTOS (SOLO ADMIN)
+// FUNCIÓN INTEGRADA: ABRE EL REPORTE E INYECTA LOS CONTENEDORES DE DOCUMENTOS Y SERVICES
+async function abrirPanelReporteVehiculo(auto) {
+    vehiculoSeleccionadoId = auto.id;
+    document.getElementById('reporte-titulo').innerText = `Reporte Unidad: ${auto.patente}`;
+    
+    // Buscar o crear un contenedor dinámico dentro de la vista-reporte para no romper el HTML viejo
+    const vistaReporte = document.getElementById('vista-reporte');
+    let contenedorDinamico = document.getElementById('secciones-adicionales-flota');
+    
+    if (!contenedorDinamico) {
+        contenedorDinamico = document.createElement('div');
+        contenedorDinamico.id = 'secciones-adicionales-flota';
+        contenedorDinamico.style.cssText = "margin-top: 25px; display: flex; flex-direction: column; gap: 20px;";
+        vistaReporte.appendChild(contenedorDinamico);
+    }
+
+    const rolUsuario = usuarioActual?.user_metadata?.rol || 'chofer';
+
+    // 1. Renderizar Estructura de Documentación Digital
+    let htmlDocumentos = `
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid #475569; padding-bottom: 5px;">
+                <span class="material-icons" style="color: #fbbf24;">folder_shared</span>
+                <h3 style="margin:0; font-size: 1.1rem; color: #fff;">Documentación Obligatoria</h3>
+            </div>
+            <div id="documentos-visor-lista" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+                <p style="color: #94a3b8; font-size: 0.85rem; italic">Cargando papeles de la unidad...</p>
+            </div>
+    `;
+    
+    if (rolUsuario === 'admin') {
+        htmlDocumentos += `
+            <div style="background-color: #111827; padding: 10px; border-radius: 6px; margin-top: 10px;">
+                <label style="color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 5px;"><strong>Subir nuevo documento (VTV, Seguro, Cédula):</strong></label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="doc-nombre-tipo" placeholder="Ej: Seguro 2026" style="flex: 1; padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
+                    <input type="file" id="doc-archivo-file" accept="image/*,application/pdf" style="max-width: 150px; font-size: 0.85rem; color: #94a3b8;">
+                    <button id="btn-guardar-documento" style="background: var(--celeste); color: #000; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.85rem;">Subir</button>
+                </div>
+            </div>
+        `;
+    }
+    htmlDocumentos += `</div>`;
+
+    // 2. Renderizar Estructura de Historial y Registro de Mantenimientos (Services)
+    let htmlServices = `
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid #475569; padding-bottom: 5px;">
+                <span class="material-icons" style="color: #10b981;">build</span>
+                <h3 style="margin:0; font-size: 1.1rem; color: #fff;">Historial de Services e Insumos</h3>
+            </div>
+            
+            <div style="background-color: #111827; padding: 12px; border-radius: 6px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;">
+                <span style="color: #34d399; font-weight: bold; font-size: 0.85rem;">Registrar Nuevo Mantenimiento / Taller</span>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <input type="text" id="srv-tarea" placeholder="Ej: Cambio Aceite y Filtros" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
+                    <input type="number" id="srv-km" placeholder="Kilometraje del Service" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
+                </div>
+                <input type="text" id="srv-notas" placeholder="Observaciones o taller (Opcional)" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
+                <button id="btn-guardar-service" style="background: #10b981; color: #fff; border: none; padding: 6px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.85rem;">Guardar Registro de Taller</button>
+            </div>
+
+            <div id="services-tabla-lista" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                <p style="color: #94a3b8; font-size: 0.85rem; italic">Cargando historial de mantenimiento...</p>
+            </div>
+        </div>
+    `;
+
+    // Inyectar bloques en la interfaz
+    contenedorDinamico.innerHTML = htmlDocumentos + htmlServices;
+
+    // Escuchar las acciones de los botones inyectados
+    if (rolUsuario === 'admin') {
+        document.getElementById('btn-guardar-documento').addEventListener('click', subirDocumentacionAuto);
+    }
+    document.getElementById('btn-guardar-service').addEventListener('click', registrarServiceVehiculo);
+
+    // Cargar la información asincrónica de la base de datos
+    consultarDocumentosAuto();
+    consultarServicesAuto();
+
+    cambiarVista('vista-reporte');
+}
+
+// ==========================================
+// SECCIÓN: LÓGICA DE DOCUMENTACIÓN (BUCKET FLOTA)
+// ==========================================
+async function subirDocumentacionAuto() {
+    const nombreTipo = document.getElementById('doc-nombre-tipo').value.trim();
+    const archivoInput = document.getElementById('doc-archivo-file');
+
+    if (!nombreTipo || !archivoInput.files || archivoInput.files.length === 0) {
+        alert("Completá el nombre del documento y seleccioná un archivo.");
+        return;
+    }
+
+    const file = archivoInput.files[0];
+    const extension = file.name.split('.').pop();
+    const nombreArchivoStorage = `docs_${vehiculoSeleccionadoId}_${Date.now()}.${extension}`;
+
+    // Subida al bucket existente 'flota'
+    const { data, error: errorUpload } = await supabaseClient.storage
+        .from('flota')
+        .upload(nombreArchivoStorage, file);
+
+    if (errorUpload) {
+        alert("Error subiendo archivo: " + errorUpload.message);
+        return;
+    }
+
+    const { data: linkPublico } = supabaseClient.storage.from('flota').getPublicUrl(nombreArchivoStorage);
+
+    // Guardar la relación en la tabla 'documentos_vehiculos'
+    const { error: errorTabla } = await supabaseClient.from('documentos_vehiculos').insert([{
+        vehiculo_id: vehiculoSeleccionadoId,
+        nombre_documento: nombreTipo,
+        url_archivo: linkPublico.publicUrl
+    }]);
+
+    if (errorTabla) {
+        alert("Error al vincular el documento: " + errorTabla.message);
+    } else {
+        alert("Documento subido y guardado con éxito.");
+        document.getElementById('doc-nombre-tipo').value = '';
+        archivoInput.value = '';
+        consultarDocumentosAuto();
+    }
+}
+
+async function consultarDocumentosAuto() {
+    const contenedor = document.getElementById('documentos-visor-lista');
+    if (!contenedor) return;
+
+    const { data: documentos, error } = await supabaseClient
+        .from('documentos_vehiculos')
+        .select('*')
+        .eq('vehiculo_id', vehiculoSeleccionadoId);
+
+    if (error || !documentos || documentos.length === 0) {
+        contenedor.innerHTML = `<p style="color: #64748b; font-size: 0.85rem; margin:0;">No hay documentos digitales cargados para este auto.</p>`;
+        return;
+    }
+
+    contenedor.innerHTML = '';
+    documentos.forEach(doc => {
+        const link = document.createElement('a');
+        link.href = doc.url_archivo;
+        link.target = '_blank';
+        link.style.cssText = "background: #334155; color: #fbbf24; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: flex; align-items: center; gap: 5px; font-weight: bold; border: 1px solid #475569;";
+        link.innerHTML = `<span class="material-icons" style="font-size:1rem;">description</span> ${doc.nombre_documento}`;
+        contenedor.appendChild(link);
+    });
+}
+
+// ==========================================
+// SECCIÓN: LÓGICA DE SERVICES (HISTORIAL)
+// ==========================================
+async function registrarServiceVehiculo() {
+    const tarea = document.getElementById('srv-tarea').value.trim();
+    const km = parseInt(document.getElementById('srv-km').value);
+    const notas = document.getElementById('srv-notas').value.trim();
+
+    if (!tarea || !km) {
+        alert("Por favor detallá qué le hicieron al auto y el kilometraje.");
+        return;
+    }
+
+    const { error } = await supabaseClient.from('services_vehiculos').insert([{
+        vehiculo_id: vehiculoSeleccionadoId,
+        tarea_realizada: tarea,
+        kilometraje: km,
+        observaciones: notas || null,
+        registrado_por: usuarioActual?.email || "Chofer"
+    }]);
+
+    if (error) {
+        alert("Error al registrar el service: " + error.message);
+    } else {
+        alert("Service asentado en el historial de la unidad.");
+        document.getElementById('srv-tarea').value = '';
+        document.getElementById('srv-km').value = '';
+        document.getElementById('srv-notas').value = '';
+        consultarServicesAuto();
+    }
+}
+
+async function consultarServicesAuto() {
+    const contenedor = document.getElementById('services-tabla-lista');
+    if (!contenedor) return;
+
+    const { data: mantes, error } = await supabaseClient
+        .from('services_vehiculos')
+        .select('*')
+        .eq('vehiculo_id', vehiculoSeleccionadoId)
+        .order('created_at', { ascending: false });
+
+    if (error || !mantes || mantes.length === 0) {
+        contenedor.innerHTML = `<p style="color: #64748b; font-size: 0.85rem; margin:0;">Sin registros de mantenimiento previos.</p>`;
+        return;
+    }
+
+    contenedor.innerHTML = '';
+    mantes.forEach(s => {
+        const fila = document.createElement('div');
+        fila.style.cssText = "background: #111827; padding: 8px; border-radius: 6px; border-left: 3px solid #10b981; font-size: 0.8rem; color: #e2e8f0;";
+        
+        const fecha = s.created_at ? new Date(s.created_at).toLocaleDateString('es-AR') : '---';
+        
+        fila.innerHTML = `
+            <div style="display:flex; justify-content: space-between; font-weight: bold; margin-bottom: 2px; color: #fff;">
+                <span>${s.tarea_realizada}</span>
+                <span style="color: #34d399;">${s.kilometraje} KM</span>
+            </div>
+            <div style="color: #94a3b8; font-size: 0.75rem;">
+                Fecha: ${fecha} | Por: ${s.registrado_por.split('@')[0]}
+            </div>
+            ${s.observaciones ? `<div style="margin-top: 3px; color: #cbd5e1; font-style: italic;">Obs: ${s.observaciones}</div>` : ''}
+        `;
+        contenedor.appendChild(fila);
+    });
+}
+
+// ==========================================
+// FUNCIONES RESTANTES INTACTAS Y FUNCIONALES
+// ==========================================
 async function agregarVehiculo() {
     const patente = document.getElementById('admin-patente').value.trim().toUpperCase();
     const modelo = document.getElementById('admin-modelo').value.trim();
@@ -189,54 +404,33 @@ async function agregarVehiculo() {
     }
 }
 
-// ELIMINAR VEHÍCULO Y REPORTES (ADMIN)
 async function eliminarVehiculoCompleto(idVehiculo, patente) {
-    const confirmar = confirm(`¿Estás seguro de eliminar el vehículo ${patente}?\nSe borrarán de forma PERMANENTE todos los reportes asociados.`);
+    const confirmar = confirm(`¿Estás seguro de eliminar el vehículo ${patente}?\nSe borrarán todos los reportes asociados.`);
     if (!confirmar) return;
 
-    const { error: errorReportes } = await supabaseClient
-        .from('reportes_jornadas')
-        .delete()
-        .eq('vehiculo_id', idVehiculo);
-
-    if (errorReportes) {
-        alert("Error al limpiar los reportes del auto: " + errorReportes.message);
-        return;
-    }
-
-    const { error: errorVehiculo } = await supabaseClient
-        .from('vehiculos')
-        .delete()
-        .eq('id', idVehiculo);
+    await supabaseClient.from('reportes_jornadas').delete().eq('vehiculo_id', idVehiculo);
+    await supabaseClient.from('documentos_vehiculos').delete().eq('vehiculo_id', idVehiculo);
+    await supabaseClient.from('services_vehiculos').delete().eq('vehiculo_id', idVehiculo);
+    
+    const { error: errorVehiculo } = await supabaseClient.from('vehiculos').delete().eq('id', idVehiculo);
 
     if (errorVehiculo) {
         alert("Error al eliminar el vehículo: " + errorVehiculo.message);
     } else {
-        alert(`Vehículo ${patente} eliminado correctamente.`);
+        alert(`Vehículo ${patente} eliminado.`);
         cargarVehiculos();
-        if (window.vistaActual === 'vista-admin') cargarReportesParaAdmin();
     }
 }
 
-// ELIMINAR UN REPORTE INDIVIDUAL (ADMIN)
 async function eliminarReporteIndividual(idReporte) {
-    const confirmar = confirm("¿Estás seguro de eliminar este reporte de jornada de forma permanente?");
+    const confirmar = confirm("¿Estás seguro de eliminar este reporte?");
     if (!confirmar) return;
 
-    const { error } = await supabaseClient
-        .from('reportes_jornadas')
-        .delete()
-        .eq('id', idReporte);
-
-    if (error) {
-        alert("Error al eliminar el reporte: " + error.message);
-    } else {
-        alert("Reporte eliminado.");
-        cargarReportesParaAdmin();
-    }
+    const { error } = await supabaseClient.from('reportes_jornadas').delete().eq('id', idReporte);
+    if (error) alert("Error: " + error.message);
+    else { alert("Reporte eliminado."); cargarReportesParaAdmin(); }
 }
 
-// ENVIAR REPORTE DE JORNADA (CON SUBIDA DE FOTOS AL BUCKET 'FLOTA')
 async function enviarReporte() {
     const tipo = document.getElementById('reporte-tipo').value;
     const kilometraje = parseInt(document.getElementById('reporte-km').value);
@@ -256,19 +450,13 @@ async function enviarReporte() {
             const archivo = inputFotos.files[i];
             const nombreArchivo = `${Date.now()}_${i}_${archivo.name}`;
             
-            // Subida limpia apuntando al bucket 'flota'
             const { data, error: uploadError } = await supabaseClient.storage
                 .from('flota')
                 .upload(nombreArchivo, archivo);
 
-            if (uploadError) {
-                console.error("Error subiendo foto:", uploadError.message);
-            } else {
-                // Generación de la URL pública correspondiente
+            if (!uploadError) {
                 const { data: publicData } = supabaseClient.storage.from('flota').getPublicUrl(nombreArchivo);
-                if (publicData?.publicUrl) {
-                    urlsFotos.push(publicData.publicUrl);
-                }
+                if (publicData?.publicUrl) urlsFotos.push(publicData.publicUrl);
             }
         }
     }
@@ -293,7 +481,6 @@ async function enviarReporte() {
     }
 }
 
-// CARGAR HISTORIAL DE REPORTES EN PANEL ADMIN
 async function cargarReportesParaAdmin() {
     const contenedor = document.getElementById('lista-reportes-admin');
     if (!contenedor) return;
@@ -303,35 +490,28 @@ async function cargarReportesParaAdmin() {
         .select('*')
         .order('created_at', { ascending: false });
 
-    const { data: vehiculos, error: errorVehiculos } = await supabaseClient
-        .from('vehiculos').select('*');
+    const { data: vehiculos } = await supabaseClient.from('vehiculos').select('*');
 
-    if (errorReportes || errorVehiculos) {
-        console.error("Error cargando historial:", errorReportes?.message || errorVehiculos?.message);
+    if (errorReportes) {
         contenedor.innerHTML = `<p style="color: #ef4444;">No se pudieron cargar los reportes.</p>`;
         return;
     }
 
     if (!reportes || reportes.length === 0) {
-        contenedor.innerHTML = `<p style="color: #64748b; font-style: italic;">No hay reportes cargados en el sistema todavía.</p>`;
+        contenedor.innerHTML = `<p style="color: #64748b; font-style: italic;">No hay reportes cargados.</p>`;
         return;
     }
 
     const mapaVehiculos = {};
     if (vehiculos) {
-        vehiculos.forEach(v => {
-            mapaVehiculos[v.id] = `${v.patente} - ${v.modelo || ''}`;
-        });
+        vehiculos.forEach(v => { mapaVehiculos[v.id] = `${v.patente} - ${v.modelo || ''}`; });
     }
 
     const reportesAgrupados = {};
     reportes.forEach(reporte => {
         const idVehiculo = reporte.vehiculo_id || 'sin_id';
         const nombreAuto = mapaVehiculos[idVehiculo] || 'Unidad No Identificada';
-
-        if (!reportesAgrupados[nombreAuto]) {
-            reportesAgrupados[nombreAuto] = [];
-        }
+        if (!reportesAgrupados[nombreAuto]) reportesAgrupados[nombreAuto] = [];
         reportesAgrupados[nombreAuto].push(reporte);
     });
 
@@ -366,44 +546,31 @@ async function cargarReportesParaAdmin() {
                         listaFotos.forEach(url => {
                             fotosHtml += `
                                 <a href="${url}" target="_blank" style="text-decoration: none; display: inline-block;">
-                                    <img src="${url}" alt="Perimetro" style="width: 70px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #475569; display: block;" title="Clic para ampliar foto">
+                                    <img src="${url}" alt="Perimetro" style="width: 70px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #475569; display: block;">
                                 </a>`;
                         });
                         fotosHtml += `</div>`;
                     }
-                } catch (e) {
-                    console.error("Error parseando imágenes:", e);
-                }
+                } catch (e) { console.error(e); }
             }
 
             tarjeta.innerHTML = `
-                <button class="btn-eliminar-reporte" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #64748b; cursor: pointer; padding: 2px;" title="Eliminar Reporte">
+                <button class="btn-eliminar-reporte" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #64748b; cursor: pointer; padding: 2px;">
                     <span class="material-icons" style="font-size: 1.1rem;">delete</span>
                 </button>
-
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding-right: 20px;">
-                    <span style="font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background-color: ${reporte.tipo === 'Inicio' ? '#064e3b' : '#78350f'}; color: ${reporte.tipo === 'Inicio' ? '#34d399' : '#fbbf24'};">
-                        ${reporte.tipo}
-                    </span>
-                    <span style="font-size: 0.8rem; color: var(--texto-gris); font-weight: 500;">${fechaStr}</span>
+                    <span style="font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background-color: ${reporte.tipo === 'Inicio' ? '#064e3b' : '#78350f'}; color: ${reporte.tipo === 'Inicio' ? '#34d399' : '#fbbf24'};">${reporte.tipo}</span>
+                    <span style="font-size: 0.8rem; color: var(--texto-gris);">${fechaStr}</span>
                 </div>
-                
                 <div style="font-size: 0.9rem; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; color: #cbd5e1;">
                     <p style="margin: 0;"><strong>KM:</strong> ${reporte.kilometraje || '---'}</p>
                     <p style="margin: 0;"><strong>Combustible:</strong> ${reporte.combustible || '---'}</p>
                 </div>
-                
-                <p style="margin: 6px 0 0 0; font-size: 0.85rem; color: #94a3b8;">
-                    <strong>Novedades:</strong> ${reporte.novedades || 'Ninguna'}
-                </p>
-                
+                <p style="margin: 6px 0 0 0; font-size: 0.85rem; color: #94a3b8;"><strong>Novedades:</strong> ${reporte.novedades || 'Ninguna'}</p>
                 ${fotosHtml}
             `;
 
-            tarjeta.querySelector('.btn-eliminar-reporte').addEventListener('click', () => {
-                eliminarReporteIndividual(reporte.id);
-            });
-
+            tarjeta.querySelector('.btn-eliminar-reporte').addEventListener('click', () => { eliminarReporteIndividual(reporte.id); });
             contenedorTarjetas.appendChild(tarjeta);
         });
 
@@ -411,7 +578,6 @@ async function cargarReportesParaAdmin() {
     }
 }
 
-// CERRAR SESIÓN
 async function cerrarSesion() {
     await supabaseClient.auth.signOut();
     usuarioActual = null;
