@@ -4,595 +4,259 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flota San Isidro</title>
+    <!-- Iconos de Google -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    
     <style>
-        /* --- VARIABLES DE COLOR (DISEÑO OSCURO) --- */
         :root {
-            --fondo-oscuro: #0d131a;
-            --tarjeta-fondo: #16222f;
-            --azul-electrico: #00b4d8;
-            --azul-hover: #0077b6;
-            --texto-blanco: #f8f9fa;
-            --texto-mutado: #94a3b8;
-            --exito: #2a9d8f;
-            --alerta: #e63946;
-            --advertencia: #ffb703;
+            --bg-principal: #0f172a;
+            --bg-card: #1e293b;
+            --celeste: #38bdf8;
+            --texto-blanco: #f8fafc;
+            --texto-gris: #94a3b8;
+            --verde-inicio: #10b981;
+            --naranja-fin: #f59e0b;
         }
-
-        /* --- ESTILOS GENERALES --- */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Roboto', sans-serif;
-        }
-
         body {
-            background-color: var(--fondo-oscuro);
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-principal);
             color: var(--texto-blanco);
             padding-bottom: 70px;
         }
-
-        /* --- ENCABEZADO --- */
-        .encabezado-app {
-            background-color: var(--tarjeta-fondo);
-            padding: 15px 20px;
+        header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 2px solid #1e293b;
+            padding: 15px 20px;
+            background-color: #0b1329;
+            border-bottom: 1px solid #1e293b;
         }
-
-        .encabezado-app h1 {
-            font-size: 1.4rem;
-            color: var(--azul-electrico);
-            font-weight: 700;
-        }
-
-        .btn-logout-header {
-            background: none;
-            border: none;
-            color: var(--texto-mutado);
-            cursor: pointer;
-        }
-
-        .btn-logout-header:hover {
-            color: var(--alerta);
-        }
-
-        /* --- CONTENEDOR VISTAS --- */
-        .contenedor-principal {
-            padding: 20px;
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        .vista {
-            display: none;
-        }
-
-        .vista.activa {
-            display: block;
-        }
-
-        h2 {
-            font-size: 1.3rem;
-            margin-bottom: 20px;
-            font-weight: 500;
-        }
-
-        /* --- FORMULARIOS Y TARJETAS --- */
-        .tarjeta-login, .tarjeta-form {
-            background-color: var(--tarjeta-fondo);
-            padding: 25px 20px;
+        h1, h2, h3 { margin: 0; }
+        .container { padding: 20px; }
+        .vista { display: none; }
+        .vista.activa { display: block; }
+        
+        /* Formularios y Tarjetas */
+        .card {
+            background-color: var(--bg-card);
             border-radius: 12px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
-        }
-
-        .grupo-formulario {
-            margin-bottom: 20px;
-        }
-
-        .grupo-formulario label {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 0.9rem;
-            color: var(--texto-mutado);
-        }
-
-        .grupo-formulario input, 
-        .grupo-formulario select, 
-        .grupo-formulario textarea {
-            width: 100%;
-            padding: 12px;
-            background-color: var(--fondo-oscuro);
-            border: 1px solid #2e4053;
-            border-radius: 8px;
-            color: var(--texto-blanco);
-            font-size: 1rem;
-            outline: none;
-        }
-
-        .grupo-formulario input:focus, 
-        .grupo-formulario select:focus {
-            border-color: var(--azul-electrico);
-        }
-
-        /* --- BOTONES --- */
-        .btn-primario {
-            width: 100%;
-            padding: 14px;
-            background-color: var(--azul-electrico);
-            border: none;
-            border-radius: 8px;
-            color: var(--fondo-oscuro);
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
-            margin-bottom: 10px;
-        }
-
-        .btn-primario:hover {
-            background-color: var(--azul-hover);
-            color: white;
-        }
-
-        .btn-secundario {
-            width: 100%;
-            padding: 12px;
-            background: none;
-            border: 1px solid var(--texto-mutado);
-            border-radius: 8px;
-            color: var(--texto-blanco);
-            font-size: 0.9rem;
-            cursor: pointer;
-        }
-
-        /* --- GRILLA DE AUTOS --- */
-        .grilla-autos {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-
-        .tarjeta-auto {
-            background-color: var(--tarjeta-fondo);
-            padding: 20px 15px;
-            border-radius: 10px;
-            text-align: center;
-            cursor: pointer;
-            border: 1px solid #2e4053;
-        }
-
-        .icono-auto {
-            font-size: 2.5rem;
-            color: var(--azul-electrico);
-            margin-bottom: 10px;
-        }
-
-        .nombre-modelo {
-            display: block;
-            font-weight: 500;
-            font-size: 1rem;
-        }
-
-        .patente {
-            display: block;
-            font-size: 0.85rem;
-            color: var(--texto-mutado);
-            margin: 4px 0 10px 0;
-        }
-
-        .estado {
-            font-size: 0.85rem;
-            font-weight: bold;
-        }
-
-        /* --- DETALLE AUTOMÓVIL --- */
-        .cabecera-detalle {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .btn-volver {
-            background: none;
-            border: 1px solid #2e4053;
-            padding: 6px 12px;
-            border-radius: 6px;
-            color: var(--texto-blanco);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .opciones-auto-menu {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 15px;
-        }
-
-        .tarjeta-opcion {
-            background-color: var(--tarjeta-fondo);
-            border: 1px solid #2e4053;
             padding: 20px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--celeste);
+            font-size: 0.9rem;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background-color: var(--bg-principal);
             color: white;
-            text-align: left;
+            box-sizing: border-box;
+        }
+        
+        /* Botones */
+        .btn {
+            background-color: var(--celeste);
+            color: var(--bg-principal);
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-weight: bold;
             cursor: pointer;
             width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
         }
-
-        .tarjeta-opcion .material-icons {
-            font-size: 2rem;
-            color: var(--azul-electrico);
-        }
-
-        .tarjeta-opcion h3 {
-            font-size: 1rem;
-            font-weight: 500;
-        }
-
-        /* --- BARRA DE NAVEGACIÓN INFERIOR --- */
-        .nav-inferior {
+        .btn:hover { opacity: 0.9; }
+        .btn-danger { background-color: #ef4444; color: white; }
+        
+        /* Barra de Navegación Inferior */
+        nav {
             position: fixed;
             bottom: 0;
             left: 0;
-            width: 100%;
+            right: 0;
             height: 60px;
-            background-color: var(--tarjeta-fondo);
+            background-color: #0b1329;
+            border-top: 1px solid #1e293b;
             display: flex;
-            border-top: 2px solid #1e293b;
-            z-index: 999;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 1000;
         }
-
-        .nav-item {
-            flex: 1;
+        .nav-btn {
             background: none;
             border: none;
-            color: var(--texto-mutado);
+            color: var(--texto-gris);
+            cursor: pointer;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             font-size: 0.75rem;
-            cursor: pointer;
+            gap: 4px;
         }
-
-        .nav-item.activo {
-            color: var(--azul-electrico);
-        }
-
-        .nav-item .material-icons {
-            margin-bottom: 3px;
-        }
-
-        /* --- CRUD ADMIN --- */
-        .lista-crud-vehiculos {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .item-crud-auto {
-            background-color: var(--fondo-oscuro);
-            padding: 12px 15px;
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-left: 4px solid var(--azul-electrico);
-        }
-
-        .crud-acciones-btn {
-            display: flex;
-            gap: 10px;
-        }
-
-        .btn-icono {
-            background: none;
-            border: none;
-            cursor: pointer;
-        }
-
-        .btn-icono.edit { color: var(--azul-electrico); }
-        .btn-icono.delete { color: var(--alerta); }
-
-        /* --- ALERTAS SERVICES --- */
-        .alerta-service-banner {
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 5px solid;
-            margin-bottom: 20px;
-            font-size: 0.95rem;
-        }
-
-        .historial-item {
-            background-color: var(--fondo-oscuro);
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            border-left: 3px solid var(--texto-mutado);
-            font-size: 0.9rem;
-        }
-
-        /* --- GALERÍAS DE FOTOS --- */
-        .galeria-fotos-previa, .grilla-documentos-visor {
+        .nav-btn.activo { color: var(--celeste); }
+        
+        /* Grid de Vehículos */
+        .grid-vehiculos {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-top: 10px;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 15px;
         }
-
-        .contenedor-miniatura {
-            position: relative;
-            width: 100%;
-            height: 80px;
-        }
-
-        .miniatura-foto {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            border-radius: 6px;
-            border: 1px solid #2e4053;
-        }
-
-        .btn-eliminar-foto {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background-color: var(--alerta);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            font-size: 12px;
+        .card-vehiculo {
+            background-color: var(--bg-card);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
             cursor: pointer;
-            font-weight: bold;
+            border: 2px solid transparent;
+        }
+        .card-vehiculo.seleccionado {
+            border-color: var(--celeste);
+            background-color: #1e3a8a;
         }
     </style>
 </head>
 <body>
 
-    <header class="encabezado-app">
-        <h1>Flota San Isidro</h1>
-        <button class="btn-logout-header" onclick="window.ejecutarLogout()"><span class="material-icons">logout</span></button>
+    <!-- ENCABEZADO SUPERIOR -->
+    <header>
+        <h1 style="font-size: 1.3rem; font-weight: bold; color: var(--celeste);">Flota San Isidro</h1>
+        
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <!-- Tu firma e identidad en la app -->
+            <span style="font-size: 0.8rem; color: #64748b; font-style: italic; letter-spacing: 0.5px;">
+                Powered by <strong style="color: var(--celeste);">GabyMartin</strong>
+            </span>
+            
+            <button id="btn-logout" style="background: none; border: none; color: var(--celeste); cursor: pointer; display: none;">
+                <span class="material-icons">logout</span>
+            </button>
+        </div>
     </header>
 
-    <main class="contenedor-principal">
-
+    <div class="container">
+        
+        <!-- VISTA 1: LOGIN -->
         <section id="vista-login" class="vista activa">
-            <div class="tarjeta-login">
-                <h2>Ingreso al Sistema</h2>
-                <div class="grupo-formulario">
-                    <label>Email</label>
-                    <input type="email" id="login-email" placeholder="correo@empresa.com">
+            <div class="card">
+                <h2 style="margin-bottom: 20px; text-align: center;">Iniciar Sesión</h2>
+                <div class="form-group">
+                    <label>Correo Electrónico</label>
+                    <input type="email" id="login-email" placeholder="correo@ejemplo.com">
                 </div>
-                <div class="grupo-formulario">
+                <div class="form-group">
                     <label>Contraseña</label>
-                    <input type="password" id="login-pass" placeholder="******">
+                    <input type="password" id="login-password" placeholder="******">
                 </div>
-                <button class="btn-primario" onclick="window.ejecutarLogin()">Iniciar Sesión</button>
-                <button class="btn-secundario" onclick="window.crearCuentaChofer()">Crear Cuenta Nuevo Chofer</button>
+                <button class="btn" id="btn-ingresar">Ingresar</button>
             </div>
         </section>
 
+        <!-- VISTA 2: FLOTA (CHOFERES Y ADMINS) -->
         <section id="vista-flota" class="vista">
-            <h2>Vehículos de la Flota</h2>
-            <div id="contenedor-flota-choferes" class="grilla-autos">
-                </div>
-        </section>
-
-        <section id="vista-auto" class="vista">
-            <div class="cabecera-detalle">
-                <button class="btn-volver" onclick="window.cambiarVista('vista-flota')">
-                    <span class="material-icons">arrow_back</span> Volver
-                </button>
-                <h2 id="nombre-auto-seleccionado">Modelo [Patente]</h2>
-            </div>
-
-            <div class="opciones-auto-menu">
-                <button class="tarjeta-opcion" onclick="window.cambiarVista('vista-checkin')">
-                    <span class="material-icons">play_circle</span>
-                    <h3>Tomar Servicio (Check-In)</h3>
-                </button>
-                <button class="tarjeta-opcion" onclick="window.cambiarVista('vista-checkout')">
-                    <span class="material-icons">stop_circle</span>
-                    <h3>Entregar Servicio (Check-Out)</h3>
-                </button>
-                <button class="tarjeta-opcion" onclick="window.abrirDocumentacion()">
-                    <span class="material-icons">folder_shared</span>
-                    <h3>Ver Documentación</h3>
-                </button>
-                <button class="tarjeta-opcion" onclick="window.abrirService()">
-                    <span class="material-icons">build</span>
-                    <h3>Mantenimiento / Services</h3>
-                </button>
+            <h2 style="margin-bottom: 15px;">Seleccione el Vehículo</h2>
+            <div id="lista-vehiculos" class="grid-vehiculos">
+                <!-- Se carga dinámicamente con JS -->
             </div>
         </section>
 
-        <section id="vista-checkin" class="vista">
-            <div class="cabecera-detalle">
-                <button class="btn-volver" onclick="window.cambiarVista('vista-auto')">
-                    <span class="material-icons">arrow_back</span>
-                </button>
-                <h2>Inicio de Jornada</h2>
-            </div>
-            <form id="form-inicio" class="tarjeta-form" onsubmit="event.preventDefault();">
-                <div class="grupo-formulario">
-                    <label>Kilometraje Actual de Tablero</label>
-                    <input type="number" id="inicio-km" placeholder="Ej: 145000" required>
-                </div>
-                <div class="grupo-formulario">
-                    <label>Nivel de Combustible</label>
-                    <select id="inicio-combustible">
-                        <option>Lleno</option>
-                        <option>3/4</option>
-                        <option>1/2</option>
-                        <option>1/4</option>
-                        <option>Reserva</option>
+        <!-- VISTA 3: REPORTE JORNADA -->
+        <section id="vista-reporte" class="vista">
+            <div class="card">
+                <h2 id="reporte-titulo" style="margin-bottom: 15px; color: var(--celeste);">Reporte de Unidad</h2>
+                
+                <div class="form-group">
+                    <label>Tipo de Registro</label>
+                    <select id="reporte-tipo">
+                        <option value="Inicio">Inicio de Jornada</option>
+                        <option value="Fin">Fin de Jornada</option>
                     </select>
                 </div>
-                <div class="grupo-formulario">
-                    <label>Fotos Perímetro del Auto (Tomar Fotos)</label>
-                    <input type="file" accept="image/*" multiple capture="environment" onchange="window.previsualizarFotosInicio(this)">
-                    <div id="galeria-inicio-previa" class="galeria-fotos-previa"></div>
+                
+                <div class="form-group">
+                    <label>Kilometraje Actual</label>
+                    <input type="number" id="reporte-km" placeholder="Ej: 125000">
                 </div>
-                <button type="button" class="btn-primario" onclick="window.guardarInicioJornada()">Confirmar Entrada</button>
-            </form>
-        </section>
-
-        <section id="vista-checkout" class="vista">
-            <div class="cabecera-detalle">
-                <button class="btn-volver" onclick="window.cambiarVista('vista-auto')">
-                    <span class="material-icons">arrow_back</span>
-                </button>
-                <h2>Cierre de Jornada</h2>
-            </div>
-            <form id="form-fin" class="tarjeta-form" onsubmit="event.preventDefault();">
-                <div class="grupo-formulario">
-                    <label>Kilometraje Final de Tablero</label>
-                    <input type="number" id="fin-km" placeholder="Ej: 145320" required>
-                </div>
-                <div class="grupo-formulario">
-                    <label>Nivel de Combustible al Entregar</label>
-                    <select id="fin-combustible">
-                        <option>Lleno</option>
-                        <option>3/4</option>
-                        <option>1/2</option>
-                        <option>1/4</option>
-                        <option>Reserva</option>
+                
+                <div class="form-group">
+                    <label>Estado del Combustible</label>
+                    <select id="reporte-combustible">
+                        <option value="Lleno">Lleno</option>
+                        <option value="3/4">3/4</option>
+                        <option value="1/2">1/2</option>
+                        <option value="1/4">1/4</option>
+                        <option value="Reserva">Reserva</option>
                     </select>
                 </div>
-                <div class="grupo-formulario checkbox-inline">
-                    <input type="checkbox" id="cargo-nafta" onchange="document.getElementById('seccion-ticket').style.display = this.checked ? 'block' : 'none'">
-                    <label for="cargo-nafta">¿Cargó combustible durante el turno?</label>
-                </div>
-                <div id="seccion-ticket" class="grupo-formulario" style="display: none;">
-                    <label>Foto del Ticket de Carga</label>
-                    <input type="file" accept="image/*" capture="environment">
-                </div>
-                <div class="grupo-formulario">
-                    <label>Novedades / Golpes / Fallas Mecánicas</label>
-                    <textarea id="fin-novedades" rows="3" placeholder="Ninguna novedad..."></textarea>
-                </div>
-                <button type="button" class="btn-primario" onclick="window.guardarFinJornada()">Liberar Vehículo</button>
-            </form>
-        </section>
 
-        <section id="vista-documentacion" class="vista">
-            <div class="cabecera-detalle">
-                <button class="btn-volver" onclick="window.cambiarVista('vista-auto')">
-                    <span class="material-icons">arrow_back</span>
-                </button>
-                <h2 id="doc-titulo-auto">Documentos</h2>
-            </div>
-            <div class="tarjeta-form">
-                <div class="grupo-formulario">
-                    <label>Subir Foto de Cédula / Seguro / RTO</label>
-                    <input type="file" accept="image/*" multiple onchange="window.procesarFotosDocumento(this)">
+                <div class="form-group">
+                    <label>Fotos del Perímetro / Inspección</label>
+                    <input type="file" id="reporte-fotos" multiple accept="image/*" style="padding: 5px;">
                 </div>
-                <div id="visor-documentos-galeria" class="grilla-documentos-visor">
-                    </div>
+                
+                <div class="form-group">
+                    <label>Novedades o Daños (Opcional)</label>
+                    <textarea id="reporte-novedades" rows="3" placeholder="Detalle si encuentra rayas, golpes o fallas..."></textarea>
+                </div>
+
+                <button class="btn" id="btn-enviar-reporte">Enviar Reporte</button>
             </div>
         </section>
 
-        <section id="vista-service" class="vista">
-            <div class="cabecera-detalle">
-                <button class="btn-volver" onclick="window.cambiarVista('vista-auto')">
-                    <span class="material-icons">arrow_back</span>
-                </button>
-                <h2 id="service-titulo-auto">Mantenimiento</h2>
-            </div>
-            
-            <div id="bloque-alerta-service" class="alerta-service-banner" style="display:none;"></div>
-
-            <div class="tarjeta-form">
-                <h3>Registrar Service Hecho</h3>
-                <div class="grupo-formulario">
-                    <label>Descripción del Trabajo</label>
-                    <input type="text" id="srv-descripcion" placeholder="Ej: Cambio de Aceite, Filtros y Correa">
-                </div>
-                <div class="grupo-formulario">
-                    <label>Kilometraje del coche al hacer el service</label>
-                    <input type="number" id="srv-km" placeholder="Ej: 150000">
-                </div>
-                <div class="grupo-formulario">
-                    <label>¿Cada cuántos KM se repite este trabajo?</label>
-                    <select id="srv-frecuencia">
-                        <option value="10000">Cada 10.000 km (Filtros estándar)</option>
-                        <option value="15000">Cada 15.000 km</option>
-                        <option value="50000">Cada 50.000 km (Distribución / Bujías)</option>
-                    </select>
-                </div>
-                <button type="button" class="btn-primario" onclick="window.agregarNuevoService()">Cargar Service al Historial</button>
-            </div>
-
-            <div class="tarjeta-form" style="margin-top:20px;">
-                <h3>Historial Reciente</h3>
-                <div id="historial-services-lista" class="lista-historial"></div>
-            </div>
-        </section>
-
+        <!-- VISTA 4: PANEL DE ADMINISTRACIÓN (SOLO ADMINS) -->
         <section id="vista-admin" class="vista">
-            <h2>Panel de Control - Administración</h2>
-            
-            <div class="tarjeta-form">
-                <h3 id="titulo-form-admin">Agregar Nuevo Vehículo</h3>
-                <input type="hidden" id="edit-index" value="-1">
-                <div class="grupo-formulario">
-                    <label>Modelo del Auto</label>
-                    <input type="text" id="admin-modelo" placeholder="Ej: Volkswagen Voyage">
-                </div>
-                <div class="grupo-formulario">
+            <!-- Gestión de Autos -->
+            <div class="card">
+                <h2 style="margin-bottom: 15px; color: var(--celeste);">Agregar Nuevo Vehículo</h2>
+                <div class="form-group">
                     <label>Patente / Dominio</label>
-                    <input type="text" id="admin-patente" placeholder="Ej: AF123AA">
+                    <input type="text" id="admin-patente" placeholder="ABC-123 o AE-123-BB">
                 </div>
-                <div class="grupo-formulario">
-                    <label>Estado Inicial</label>
-                    <select id="admin-estado">
-                        <option>Disponible</option>
-                        <option>En Uso</option>
-                        <option>En Taller</option>
-                    </select>
+                <div class="form-group">
+                    <label>Modelo / Descripción</label>
+                    <input type="text" id="admin-modelo" placeholder="Ej: Toyota Hilux 2024">
                 </div>
-                <div class="botones-admin-flex">
-                    <button type="button" id="btn-guardar-auto" class="btn-primario" onclick="window.guardarVehiculo()">Guardar Vehículo</button>
-                    <button type="button" id="btn-cancelar-edicion" class="btn-secundario" style="display:none;" onclick="window.limpiarFormularioAdmin()">Cancelar</button>
-                </div>
+                <button class="btn" id="btn-agregar-vehiculo">Guardar Vehículo</button>
             </div>
 
-            <div class="tarjeta-form" style="margin-top: 20px;">
-                <h3>Vehículos Registrados</h3>
-                <div id="lista-crud-admin" class="lista-crud-vehiculos">
-                    </div>
+            <!-- HISTORIAL DE REPORTES E IMÁGENES -->
+            <div class="card" style="background-color: #1a233a;">
+                <h3 style="color: var(--celeste); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                    <span class="material-icons">assignment</span> Historial de Jornadas y Reportes
+                </h3>
+                <div id="lista-reportes-admin" style="display: flex; flex-direction: column; gap: 15px;">
+                    <p style="color: var(--texto-gris); font-style: italic;">Cargando reportes de la flota...</p>
+                </div>
             </div>
         </section>
 
-    </main>
+    </div>
 
-    <nav class="nav-inferior" style="display: none;">
-        <button class="nav-item activo" onclick="window.cambiarVista('vista-flota'); window.activarNav(this)">
-            <span class="material-icons">directions_car</span>
-            <span>Flota</span>
+    <!-- MENÚ DE NAVEGACIÓN INFERIOR -->
+    <nav id="menu-navegacion" style="display: none;">
+        <button class="nav-btn activo" onclick="cambiarVista('vista-flota')">
+            <span class="material-icons">directions_car</span>Flota
         </button>
-        <button class="nav-item" onclick="window.cambiarVista('vista-admin'); window.activarNav(this)">
-            <span class="material-icons">admin_panel_settings</span>
-            <span>Admin</span>
+        <button class="nav-btn" id="btn-nav-admin" onclick="cambiarVista('vista-admin')" style="display: none;">
+            <span class="material-icons">admin_panel_settings</span>Admin
         </button>
     </nav>
 
-    <script type="module" src="app.js"></script>
+    <!-- CDN de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Tu archivo de lógica -->
+    <script src="app.js"></script>
 </body>
 </html>
