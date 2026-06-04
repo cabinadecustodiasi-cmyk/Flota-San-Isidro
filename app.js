@@ -4,6 +4,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // Usamos supabaseClient para que el navegador no se trabe
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 // VARIABLES GLOBALES DE CONTROL
 let usuarioActual = null;
 let vehiculoSeleccionadoId = null;
@@ -11,8 +12,15 @@ window.vistaActual = 'vista-login';
 
 // EVENTOS AL CARGAR LA PÁGINA
 document.addEventListener("DOMContentLoaded", async () => {
-    // Escuchar botones de Login y Cierre
+    // Escuchar botones de Login, Registro y Cierre
     document.getElementById('btn-ingresar').addEventListener('click', iniciarSesion);
+    
+    // Agregamos el listener para el botón de registro si existe en tu HTML
+    const btnRegistrar = document.getElementById('btn-registrar');
+    if (btnRegistrar) {
+        btnRegistrar.addEventListener('click', registrarUsuario);
+    }
+
     document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
     document.getElementById('btn-agregar-vehiculo').addEventListener('click', agregarVehiculo);
     document.getElementById('btn-enviar-reporte').addEventListener('click', enviarReporte);
@@ -23,6 +31,43 @@ document.addEventListener("DOMContentLoaded", async () => {
         configurarSesionActiva(user);
     }
 });
+
+// FUNCIÓN DE REGISTRO (NUEVA: ASIGNA ROL CHOFER POR DEFECTO)
+async function registrarUsuario() {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+
+    if (!email || !password) {
+        alert("Por favor complete email y contraseña para registrarse.");
+        return;
+    }
+
+    if (password.length < 6) {
+        alert("La contraseña debe tener al menos 6 caracteres.");
+        return;
+    }
+
+    // Registramos en Supabase mandando el rol 'chofer' en los metadatos de usuario
+    const { data, error } = await supabaseClient.auth.signUp({
+        email: email,
+        password: password,
+        options: {
+            data: {
+                rol: 'chofer' // Asignación automática por defecto
+            }
+        }
+    });
+
+    if (error) {
+        alert("Error al registrar cuenta: " + error.message);
+        return;
+    }
+
+    if (data && data.user) {
+        alert("¡Cuenta creada con éxito! Ingresando al sistema...");
+        configurarSesionActiva(data.user);
+    }
+}
 
 // FUNCIÓN DE LOGUEO
 async function iniciarSesion() {
@@ -199,18 +244,21 @@ async function enviarReporte() {
     }
 }
 
-// CARGAR HISTORIAL DE REPORTES (SOLO ADMINS)
+// CARGAR HISTORIAL DE REPORTES AGRUPADOS POR VEHÍCULO (SOLO ADMINS)
 async function cargarReportesParaAdmin() {
     const contenedor = document.getElementById('lista-reportes-admin');
     if (!contenedor) return;
 
-    const { data: reportes, error } = await supabaseClient
+    const { data: reportes, error: errorReportes } = await supabaseClient
         .from('reportes_jornadas')
         .select('*')
         .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error("Error trayendo reportes:", error.message);
+    const { data: vehiculos, error: errorVehiculos } = await supabaseClient
+        .from('vehiculos').select('*');
+
+    if (errorReportes || errorVehiculos) {
+        console.error("Error cargando historial:", errorReportes?.message || errorVehiculos?.message);
         contenedor.innerHTML = `<p style="color: #ef4444;">No se pudieron cargar los reportes.</p>`;
         return;
     }
@@ -220,55 +268,86 @@ async function cargarReportesParaAdmin() {
         return;
     }
 
+    const mapaVehiculos = {};
+    if (vehiculos) {
+        vehiculos.forEach(v => {
+            mapaVehiculos[v.id] = `${v.patente} - ${v.modelo || ''}`;
+        });
+    }
+
+    const reportesAgrupados = {};
+    reportes.forEach(reporte => {
+        const idVehiculo = reporte.vehiculo_id || 'sin_id';
+        const nombreAuto = mapaVehiculos[idVehiculo] || 'Unidad No Identificada';
+
+        if (!reportesAgrupados[nombreAuto]) {
+            reportesAgrupados[nombreAuto] = [];
+        }
+        reportesAgrupados[nombreAuto].push(reporte);
+    });
+
     contenedor.innerHTML = '';
 
-    reportes.forEach(reporte => {
-        const tarjeta = document.createElement('div');
-        tarjeta.style.cssText = "background-color: #0f172a; padding: 15px; border-radius: 8px; border-left: 5px solid " + (reporte.tipo === 'Inicio' ? 'var(--verde-inicio)' : 'var(--naranja-fin)') + ";";
+    for (const [auto, listaDeReportes] of Object.entries(reportesAgrupados)) {
+        const bloqueAuto = document.createElement('div');
+        bloqueAuto.style.cssText = "margin-bottom: 25px; border: 1px solid #334155; border-radius: 10px; padding: 15px; background-color: #111827;";
 
-        const fechaStr = reporte.created_at ? new Date(reporte.created_at).toLocaleString('es-AR') : 'Sin fecha';
-
-        // Renderizado de las imágenes adjuntas
-        let fotosHtml = '';
-        if (reporte.fotos_perimetro) {
-            try {
-                const listaFotos = typeof reporte.fotos_perimetro === 'string' ? JSON.parse(reporte.fotos_perimetro) : reporte.fotos_perimetro;
-                if (Array.isArray(listaFotos) && listaFotos.length > 0) {
-                    fotosHtml = `<div style="display: flex; gap: 10px; margin-top: 10px; overflow-x: auto; padding-bottom: 5px;">`;
-                    listaFotos.forEach(url => {
-                        fotosHtml += `<img src="${url}" alt="Perímetro" style="width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #334155; cursor: pointer;" onclick="window.open('${url}', '_blank')">`;
-                    });
-                    fotosHtml += `</div>`;
-                } else {
-                    fotosHtml = `<p style="font-size: 0.85rem; color: #475569; margin: 8px 0 0 0;">Sin fotos de perímetro</p>`;
-                }
-            } catch (e) {
-                fotosHtml = `<p style="font-size: 0.85rem; color: #475569; margin: 8px 0 0 0;">Sin fotos de perímetro</p>`;
-            }
-        }
-
-        tarjeta.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="font-weight: bold; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; background-color: ${reporte.tipo === 'Inicio' ? '#064e3b' : '#78350f'}; color: ${reporte.tipo === 'Inicio' ? '#34d399' : '#fbbf24'};">
-                    Jornada: ${reporte.tipo}
-                </span>
-                <span style="font-size: 0.8rem; color: var(--texto-gris);">${fechaStr}</span>
+        bloqueAuto.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid var(--celeste);">
+                <span class="material-icons" style="color: var(--celeste);">directions_car</span>
+                <h4 style="margin: 0; font-size: 1.1rem; color: #ffffff; font-weight: bold;">${auto}</h4>
             </div>
-            
-            <div style="font-size: 0.95rem; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; color: #cbd5e1;">
-                <p style="margin: 0;"><strong>KM:</strong> ${reporte.kilometraje || '---'}</p>
-                <p style="margin: 0;"><strong>Tanque:</strong> ${reporte.combustible || '---'}</p>
-            </div>
-            
-            <p style="margin: 8px 0 0 0; font-size: 0.9rem; color: #94a3b8;">
-                <strong>Novedades:</strong> ${reporte.novedades || 'Ninguna'}
-            </p>
-            
-            ${fotosHtml}
+            <div class="lista-tarjetas-jornada" style="display: flex; flex-direction: column; gap: 12px;"></div>
         `;
 
-        contenedor.appendChild(tarjeta);
-    });
+        const contenedorTarjetas = bloqueAuto.querySelector('.lista-tarjetas-jornada');
+
+        listaDeReportes.forEach(reporte => {
+            const tarjeta = document.createElement('div');
+            tarjeta.style.cssText = "background-color: #1e293b; padding: 12px; border-radius: 8px; border-left: 5px solid " + (reporte.tipo === 'Inicio' ? 'var(--verde-inicio)' : 'var(--naranja-fin)') + ";";
+
+            const fechaStr = reporte.created_at ? new Date(reporte.created_at).toLocaleString('es-AR') : 'Sin fecha';
+
+            let fotosHtml = '';
+            if (reporte.fotos_perimetro) {
+                try {
+                    const listaFotos = typeof reporte.fotos_perimetro === 'string' ? JSON.parse(reporte.fotos_perimetro) : reporte.fotos_perimetro;
+                    if (Array.isArray(listaFotos) && listaFotos.length > 0) {
+                        fotosHtml = `<div style="display: flex; gap: 10px; margin-top: 10px; overflow-x: auto; padding-bottom: 5px;">`;
+                        listaFotos.forEach(url => {
+                            fotosHtml += `<img src="${url}" alt="Perímetro" style="width: 70px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #475569; cursor: pointer;" onclick="window.open('${url}', '_blank')">`;
+                        });
+                        fotosHtml += `</div>`;
+                    }
+                } catch (e) {
+                    console.error("Error parseando imágenes:", e);
+                }
+            }
+
+            tarjeta.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background-color: ${reporte.tipo === 'Inicio' ? '#064e3b' : '#78350f'}; color: ${reporte.tipo === 'Inicio' ? '#34d399' : '#fbbf24'};">
+                        ${reporte.tipo}
+                    </span>
+                    <span style="font-size: 0.8rem; color: var(--texto-gris); font-weight: 500;">${fechaStr}</span>
+                </div>
+                
+                <div style="font-size: 0.9rem; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; color: #cbd5e1;">
+                    <p style="margin: 0;"><strong>KM:</strong> ${reporte.kilometraje || '---'}</p>
+                    <p style="margin: 0;"><strong>Combustible:</strong> ${reporte.combustible || '---'}</p>
+                </div>
+                
+                <p style="margin: 6px 0 0 0; font-size: 0.85rem; color: #94a3b8;">
+                    <strong>Novedades:</strong> ${reporte.novedades || 'Ninguna'}
+                </p>
+                
+                ${fotosHtml}
+            `;
+            contenedorTarjetas.appendChild(tarjeta);
+        });
+
+        contenedor.appendChild(bloqueAuto);
+    }
 }
 
 // CERRAR SESIÓN
