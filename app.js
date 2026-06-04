@@ -1,8 +1,8 @@
-// CONFIGURACIÓN DE SUPABASE REAL Y VERIFICADA
+// CONFIGURACIÓN DE SUPABASE REAL Y VERIFICADA (VARIABLE CORREGIDA PARA EVITAR CONFLICTOS)
 const SUPABASE_URL = "https://toqauhxdcyggnsejjijk.supabase.co"; 
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvcWF1aHhkY3lnZ25zZWpqaWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDU4MzQsImV4cCI6MjA5NjA4MTgzNH0.Eb2u6O10ulBv20OoKvwaE64aqwEQzU80GnkbNd8Tp0I"; 
 
-// Usamos supabaseClient para que el navegador no se trabe
+// Usamos supabaseClient (con un nombre distinto) para que no choque con la librería global de Supabase
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // VARIABLES GLOBALES DE CONTROL
@@ -12,15 +12,8 @@ window.vistaActual = 'vista-login';
 
 // EVENTOS AL CARGAR LA PÁGINA
 document.addEventListener("DOMContentLoaded", async () => {
-    // Escuchar botones de Login, Registro y Cierre
-    document.getElementById('btn-ingresar').addEventListener('click', iniciarSesion);
-    
-    // Agregamos el listener para el botón de registro si existe en tu HTML
-    const btnRegistrar = document.getElementById('btn-registrar');
-    if (btnRegistrar) {
-        btnRegistrar.addEventListener('click', registrarUsuario);
-    }
-
+    // Escuchar botones de la interfaz
+    document.getElementById('btn-ingresar').addEventListener('click', manejarAccesoUsuario);
     document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
     document.getElementById('btn-agregar-vehiculo').addEventListener('click', agregarVehiculo);
     document.getElementById('btn-enviar-reporte').addEventListener('click', enviarReporte);
@@ -32,45 +25,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
-// FUNCIÓN DE REGISTRO (NUEVA: ASIGNA ROL CHOFER POR DEFECTO)
-async function registrarUsuario() {
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-
-    if (!email || !password) {
-        alert("Por favor complete email y contraseña para registrarse.");
-        return;
-    }
-
-    if (password.length < 6) {
-        alert("La contraseña debe tener al menos 6 caracteres.");
-        return;
-    }
-
-    // Registramos en Supabase mandando el rol 'chofer' en los metadatos de usuario
-    const { data, error } = await supabaseClient.auth.signUp({
-        email: email,
-        password: password,
-        options: {
-            data: {
-                rol: 'chofer' // Asignación automática por defecto
-            }
-        }
-    });
-
-    if (error) {
-        alert("Error al registrar cuenta: " + error.message);
-        return;
-    }
-
-    if (data && data.user) {
-        alert("¡Cuenta creada con éxito! Ingresando al sistema...");
-        configurarSesionActiva(data.user);
-    }
-}
-
-// FUNCIÓN DE LOGUEO
-async function iniciarSesion() {
+// GESTIÓN DE ACCESO AUTOMÁTICO (LOGIN O REGISTRO SI NO EXISTE)
+async function manejarAccesoUsuario() {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
 
@@ -79,15 +35,46 @@ async function iniciarSesion() {
         return;
     }
 
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-
-    if (error) {
-        alert("Error al ingresar: " + error.message);
+    if (password.length < 6) {
+        alert("La contraseña debe tener al menos 6 caracteres.");
         return;
     }
 
-    if (data && data.user) {
-        configurarSesionActiva(data.user);
+    // Primero intentamos iniciar sesión de forma normal
+    const { data: loginData, error: loginError } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+    if (!loginError && loginData && loginData.user) {
+        // Cuenta existente: ingresa directo
+        configurarSesionActiva(loginData.user);
+        return;
+    }
+
+    // Si el error es que el usuario no existe o credenciales inválidas en cuenta nueva, la creamos automáticamente
+    if (loginError && (loginError.message.includes("Invalid login credentials") || loginError.status === 400 || loginError.status === 404)) {
+        console.log("Usuario no encontrado, registrando chofer nuevo de manera automática...");
+        
+        const { data: signupData, error: signupError } = await supabaseClient.auth.signUp({
+            email: email,
+            password: password,
+            options: {
+                data: {
+                    rol: 'chofer' // Asignación automática de rol por defecto
+                }
+            }
+        });
+
+        if (signupError) {
+            alert("Error al registrar chofer nuevo: " + signupError.message);
+            return;
+        }
+
+        if (signupData && signupData.user) {
+            alert("¡Cuenta de chofer registrada con éxito! Ingresando al panel de control...");
+            configurarSesionActiva(signupData.user);
+        }
+    } else {
+        // Cualquier otro error de red inesperado
+        alert("Error de acceso: " + loginError.message);
     }
 }
 
@@ -97,15 +84,15 @@ function configurarSesionActiva(user) {
     document.getElementById('btn-logout').style.display = 'block';
     document.getElementById('menu-navegacion').style.display = 'flex';
     
-    // Filtro de Seguridad por Rol
+    // Filtro de Seguridad por Rol en los Metadatos
     const rolUsuario = user?.user_metadata?.rol || 'chofer';
     const btnNavAdmin = document.getElementById('btn-nav-admin');
 
     if (rolUsuario === 'admin') {
-        if (btnNavAdmin) btnNavAdmin.style.display = 'flex'; // Muestra solapa Admin
-        cargarReportesParaAdmin(); // Carga el historial de auditoría
+        if (btnNavAdmin) btnNavAdmin.style.display = 'flex'; // Muestra solapa Admin si corresponde
+        cargarReportesParaAdmin(); // Carga el historial agrupado por auditoría
     } else {
-        if (btnNavAdmin) btnNavAdmin.style.display = 'none'; // Oculta solapa Admin al chofer
+        if (btnNavAdmin) btnNavAdmin.style.display = 'none'; // Oculta solapa Admin al chofer común
     }
 
     cambiarVista('vista-flota');
@@ -114,22 +101,19 @@ function configurarSesionActiva(user) {
 
 // NAVEGACIÓN ENTRE VISTAS
 window.cambiarVista = function(idVista) {
-    // Ocultar todas
     document.querySelectorAll('.vista').forEach(v => v.classList.remove('activa'));
-    // Mostrar la seleccionada
     const vistaDestino = document.getElementById(idVista);
     if (vistaDestino) {
         vistaDestino.classList.add('activa');
         window.vistaActual = idVista;
     }
 
-    // Actualizar estados de botones del menú inferior
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('activo'));
     if (idVista === 'vista-flota') {
         document.querySelector('button[onclick*="vista-flota"]')?.classList.add('activo');
     } else if (idVista === 'vista-admin') {
         document.querySelector('button[onclick*="vista-admin"]')?.classList.add('activo');
-        cargarReportesParaAdmin(); // Actualiza los reportes al entrar
+        cargarReportesParaAdmin();
     }
 }
 
@@ -200,13 +184,11 @@ async function enviarReporte() {
 
     let urlsFotos = [];
 
-    // Subir fotos al Storage si el chofer seleccionó archivos
     if (inputFotos && inputFotos.files.length > 0) {
         for (let i = 0; i < inputFotos.files.length; i++) {
             const archivo = inputFotos.files[i];
             const nombreArchivo = `${Date.now()}_${i}_${archivo.name}`;
             
-            // Subimos al bucket llamado 'perimetros'
             const { data, error: uploadError } = await supabaseClient.storage
                 .from('perimetros')
                 .upload(nombreArchivo, archivo);
@@ -214,7 +196,6 @@ async function enviarReporte() {
             if (uploadError) {
                 console.error("Error subiendo foto:", uploadError.message);
             } else {
-                // Generamos la URL pública de la imagen
                 const { data: publicData } = supabaseClient.storage.from('perimetros').getPublicUrl(nombreArchivo);
                 if (publicData?.publicUrl) {
                     urlsFotos.push(publicData.publicUrl);
@@ -223,20 +204,19 @@ async function enviarReporte() {
         }
     }
 
-    // Insertamos la fila en la tabla reportes_jornadas
     const { error } = await supabaseClient.from('reportes_jornadas').insert([{
         tipo,
         kilometraje,
         combustible,
         novedades: novedades || null,
-        fotos_perimetro: urlsFotos // Guardamos el array de URLs
+        fotos_perimetro: urlsFotos,
+        vehiculo_id: vehiculoSeleccionadoId
     }]);
 
     if (error) {
         alert("Error al enviar el reporte: " + error.message);
     } else {
         alert("Reporte guardado con éxito.");
-        // Limpiamos el formulario
         document.getElementById('reporte-km').value = '';
         document.getElementById('reporte-novedades').value = '';
         if (inputFotos) inputFotos.value = '';
