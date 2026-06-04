@@ -133,11 +133,36 @@ async function cargarVehiculos() {
     vehiculos.forEach(auto => {
         const item = document.createElement('div');
         item.className = 'card-vehiculo';
+        
+        // Obtenemos el rol para saber si le dibujamos el botón de eliminar auto
+        const rolUsuario = usuarioActual?.user_metadata?.rol || 'chofer';
+        let botonEliminarAutoHtml = '';
+        
+        if (rolUsuario === 'admin') {
+            botonEliminarAutoHtml = `
+                <button class="btn-eliminar-auto" style="position: absolute; top: 5px; right: 5px; background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px;" title="Eliminar Vehículo">
+                    <span class="material-icons" style="font-size: 1.2rem;">delete</span>
+                </button>
+            `;
+            item.style.position = 'relative'; // Necesario para posicionar el tachito arriba a la derecha
+        }
+
         item.innerHTML = `
-            <span class="material-icons" style="font-size: 2.5rem; color: var(--celeste);">directions_car</span>
+            ${botonEliminarAutoHtml}
+            <span class="material-icons" style="font-size: 2.5rem; color: var(--celeste); margin-top: 5px;">directions_car</span>
             <div style="font-weight: bold; margin-top: 5px;">${auto.patente}</div>
             <div style="font-size: 0.8rem; color: var(--texto-gris);">${auto.modelo || ''}</div>
         `;
+
+        // Si hace clic en el tacho, borra. Si hace clic en el resto de la tarjeta, abre reporte.
+        const botonTacho = item.querySelector('.btn-eliminar-auto');
+        if (botonTacho) {
+            botonTacho.addEventListener('click', (e) => {
+                e.stopPropagation(); // Evita que se abra la vista de reporte al querer borrar
+                eliminarVehículoCompleto(auto.id, auto.patente);
+            });
+        }
+
         item.onclick = () => {
             vehiculoSeleccionadoId = auto.id;
             document.getElementById('reporte-titulo').innerText = `Reporte Unidad: ${auto.patente}`;
@@ -166,6 +191,56 @@ async function agregarVehiculo() {
         document.getElementById('admin-patente').value = '';
         document.getElementById('admin-modelo').value = '';
         cargarVehiculos();
+    }
+}
+
+// ELIMINAR VEHÍCULO Y SUS REPORTES ASOCIADOS (NUEVA FUNCIÓN ADMIN)
+async function eliminarVehículoCompleto(idVehiculo, patente) {
+    const confirmar = confirm(`¿Estás seguro de eliminar el vehículo ${patente}?\nSe borrarán de forma PERMANENTE todos los reportes de jornadas asociados a este auto.`);
+    if (!confirmar) return;
+
+    // 1. Borramos primero los reportes para no violar la integridad referencial
+    const { error: errorReportes } = await supabaseClient
+        .from('reportes_jornadas')
+        .delete()
+        .eq('vehiculo_id', idVehiculo);
+
+    if (errorReportes) {
+        alert("Error al limpiar los reportes del auto: " + errorReportes.message);
+        return;
+    }
+
+    // 2. Ahora sí eliminamos el vehículo de la lista
+    const { error: errorVehiculo } = await supabaseClient
+        .from('vehiculos')
+        .delete()
+        .eq('id', idVehiculo);
+
+    if (errorVehiculo) {
+        alert("Error al eliminar el vehículo: " + errorVehiculo.message);
+    } else {
+        alert(`Vehículo ${patente} eliminado correctamente.`);
+        cargarVehiculos();
+        // Si estamos parados en la vista de admin, refrescamos el historial
+        if (window.vistaActual === 'vista-admin') cargarReportesParaAdmin();
+    }
+}
+
+// ELIMINAR UN REPORTE INDIVIDUAL (NUEVA FUNCIÓN ADMIN)
+async function eliminarReporteIndividual(idReporte) {
+    const confirmar = confirm("¿Estás seguro de eliminar este reporte de jornada de forma permanente?");
+    if (!confirmar) return;
+
+    const { error } = await supabaseClient
+        .from('reportes_jornadas')
+        .delete()
+        .eq('id', idReporte);
+
+    if (error) {
+        alert("Error al eliminar el reporte: " + error.message);
+    } else {
+        alert("Reporte eliminado.");
+        cargarReportesParaAdmin(); // Recarga el panel agrupado
     }
 }
 
@@ -284,7 +359,7 @@ async function cargarReportesParaAdmin() {
 
         listaDeReportes.forEach(reporte => {
             const tarjeta = document.createElement('div');
-            tarjeta.style.cssText = "background-color: #1e293b; padding: 12px; border-radius: 8px; border-left: 5px solid " + (reporte.tipo === 'Inicio' ? 'var(--verde-inicio)' : 'var(--naranja-fin)') + ";";
+            tarjeta.style.cssText = "background-color: #1e293b; padding: 12px; border-radius: 8px; border-left: 5px solid " + (reporte.tipo === 'Inicio' ? 'var(--verde-inicio)' : 'var(--naranja-fin)') + "; position: relative;";
 
             const fechaStr = reporte.created_at ? new Date(reporte.created_at).toLocaleString('es-AR') : 'Sin fecha';
 
@@ -305,7 +380,11 @@ async function cargarReportesParaAdmin() {
             }
 
             tarjeta.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <button class="btn-eliminar-reporte" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #64748b; cursor: pointer; padding: 2px;" title="Eliminar Reporte">
+                    <span class="material-icons" style="font-size: 1.1rem;">delete</span>
+                </button>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding-right: 20px;">
                     <span style="font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background-color: ${reporte.tipo === 'Inicio' ? '#064e3b' : '#78350f'}; color: ${reporte.tipo === 'Inicio' ? '#34d399' : '#fbbf24'};">
                         ${reporte.tipo}
                     </span>
@@ -323,6 +402,12 @@ async function cargarReportesParaAdmin() {
                 
                 ${fotosHtml}
             `;
+
+            // Vincular el evento de borrado al tachito del reporte
+            tarjeta.querySelector('.btn-eliminar-reporte').addEventListener('click', () => {
+                eliminarReporteIndividual(reporte.id);
+            });
+
             contenedorTarjetas.appendChild(tarjeta);
         });
 
