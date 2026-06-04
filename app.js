@@ -358,7 +358,7 @@ async function registrarServiceVehiculo() {
     // Actualizamos la columna jsonb 'services'
     const { error } = await supabaseClient
         .from('vehiculos')
-        .update({ services: listaServices })
+        .update({ services: JSON.stringify(listaServices) })
         .eq('id', vehiculoSeleccionado.id);
 
     if (error) {
