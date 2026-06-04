@@ -6,18 +6,16 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // VARIABLES GLOBALES DE CONTROL
 let usuarioActual = null;
-let vehiculoSeleccionadoId = null;
+let vehiculoSeleccionado = null; // Guardamos el objeto completo del auto
 window.vistaActual = 'vista-login';
 
 // EVENTOS AL CARGAR LA PÁGINA
 document.addEventListener("DOMContentLoaded", async () => {
-    // Escuchar botones fijos de la interfaz
     document.getElementById('btn-ingresar').addEventListener('click', manejarAccesoUsuario);
     document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
     document.getElementById('btn-agregar-vehiculo').addEventListener('click', agregarVehiculo);
     document.getElementById('btn-enviar-reporte').addEventListener('click', enviarReporte);
 
-    // Chequear si ya hay una sesión guardada en el dispositivo
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (user) {
         configurarSesionActiva(user);
@@ -158,12 +156,11 @@ async function cargarVehiculos() {
     });
 }
 
-// FUNCIÓN INTEGRADA: ABRE EL REPORTE E INYECTA LOS CONTENEDORES DE DOCUMENTOS Y SERVICES
+// ABRE EL REPORTE E INYECTA LOS CONTENEDORES DE DOCUMENTOS Y SERVICES (USANDO LA ESTRUCTURA NATIVA)
 async function abrirPanelReporteVehiculo(auto) {
-    vehiculoSeleccionadoId = auto.id;
+    vehiculoSeleccionado = auto; // Guardamos el objeto completo del auto activo
     document.getElementById('reporte-titulo').innerText = `Reporte Unidad: ${auto.patente}`;
     
-    // Buscar o crear un contenedor dinámico dentro de la vista-reporte para no romper el HTML viejo
     const vistaReporte = document.getElementById('vista-reporte');
     let contenedorDinamico = document.getElementById('secciones-adicionales-flota');
     
@@ -183,9 +180,7 @@ async function abrirPanelReporteVehiculo(auto) {
                 <span class="material-icons" style="color: #fbbf24;">folder_shared</span>
                 <h3 style="margin:0; font-size: 1.1rem; color: #fff;">Documentación Obligatoria</h3>
             </div>
-            <div id="documentos-visor-lista" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
-                <p style="color: #94a3b8; font-size: 0.85rem; italic">Cargando papeles de la unidad...</p>
-            </div>
+            <div id="documentos-visor-lista" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;"></div>
     `;
     
     if (rolUsuario === 'admin') {
@@ -220,30 +215,26 @@ async function abrirPanelReporteVehiculo(auto) {
                 <button id="btn-guardar-service" style="background: #10b981; color: #fff; border: none; padding: 6px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.85rem;">Guardar Registro de Taller</button>
             </div>
 
-            <div id="services-tabla-lista" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
-                <p style="color: #94a3b8; font-size: 0.85rem; italic">Cargando historial de mantenimiento...</p>
-            </div>
+            <div id="services-tabla-lista" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;"></div>
         </div>
     `;
 
-    // Inyectar bloques en la interfaz
     contenedorDinamico.innerHTML = htmlDocumentos + htmlServices;
 
-    // Escuchar las acciones de los botones inyectados
     if (rolUsuario === 'admin') {
         document.getElementById('btn-guardar-documento').addEventListener('click', subirDocumentacionAuto);
     }
     document.getElementById('btn-guardar-service').addEventListener('click', registrarServiceVehiculo);
 
-    // Cargar la información asincrónica de la base de datos
-    consultarDocumentosAuto();
-    consultarServicesAuto();
+    // Mostrar los datos que ya contiene el objeto del vehículo
+    mostrarDocumentosAuto();
+    mostrarServicesAuto();
 
     cambiarVista('vista-reporte');
 }
 
 // ==========================================
-// SECCIÓN: LÓGICA DE DOCUMENTACIÓN (BUCKET FLOTA)
+// SECCIÓN: LÓGICA DE DOCUMENTACIÓN (COLUMNA NATIVA 'documentos')
 // ==========================================
 async function subirDocumentacionAuto() {
     const nombreTipo = document.getElementById('doc-nombre-tipo').value.trim();
@@ -256,10 +247,10 @@ async function subirDocumentacionAuto() {
 
     const file = archivoInput.files[0];
     const extension = file.name.split('.').pop();
-    const nombreArchivoStorage = `docs_${vehiculoSeleccionadoId}_${Date.now()}.${extension}`;
+    const nombreArchivoStorage = `docs_${vehiculoSeleccionado.id}_${Date.now()}.${extension}`;
 
-    // Subida al bucket existente 'flota'
-    const { data, error: errorUpload } = await supabaseClient.storage
+    // Subida al bucket 'flota'
+    const { data: uploadData, error: errorUpload } = await supabaseClient.storage
         .from('flota')
         .upload(nombreArchivoStorage, file);
 
@@ -270,33 +261,54 @@ async function subirDocumentacionAuto() {
 
     const { data: linkPublico } = supabaseClient.storage.from('flota').getPublicUrl(nombreArchivoStorage);
 
-    // Guardar la relación en la tabla 'documentos_vehiculos'
-    const { error: errorTabla } = await supabaseClient.from('documentos_vehiculos').insert([{
-        vehiculo_id: vehiculoSeleccionadoId,
-        nombre_documento: nombreTipo,
-        url_archivo: linkPublico.publicUrl
-    }]);
+    // Interpretamos los documentos existentes
+    let listaDocumentos = [];
+    if (vehiculoSeleccionado.documentos) {
+        try {
+            listaDocumentos = JSON.parse(vehiculoSeleccionado.documentos);
+            if (!Array.isArray(listaDocumentos)) listaDocumentos = [];
+        } catch (e) {
+            listaDocumentos = [];
+        }
+    }
 
-    if (errorTabla) {
-        alert("Error al vincular el documento: " + errorTabla.message);
+    // Sumamos el nuevo documento al array
+    listaDocumentos.push({
+        nombre: nombreTipo,
+        url: linkPublico.publicUrl
+    });
+
+    // Guardamos la actualización en la columna 'documentos' de la tabla 'vehiculos'
+    const { error: errorUpdate } = await supabaseClient
+        .from('vehiculos')
+        .update({ documentos: JSON.stringify(listaDocumentos) })
+        .eq('id', vehiculoSeleccionado.id);
+
+    if (errorUpdate) {
+        alert("Error al guardar el documento en la base de datos: " + errorUpdate.message);
     } else {
-        alert("Documento subido y guardado con éxito.");
+        alert("Documento guardado con éxito.");
+        vehiculoSeleccionado.documentos = JSON.stringify(listaDocumentos);
         document.getElementById('doc-nombre-tipo').value = '';
         archivoInput.value = '';
-        consultarDocumentosAuto();
+        mostrarDocumentosAuto();
     }
 }
 
-async function consultarDocumentosAuto() {
+function mostrarDocumentosAuto() {
     const contenedor = document.getElementById('documentos-visor-lista');
     if (!contenedor) return;
 
-    const { data: documentos, error } = await supabaseClient
-        .from('documentos_vehiculos')
-        .select('*')
-        .eq('vehiculo_id', vehiculoSeleccionadoId);
+    let documentos = [];
+    if (vehiculoSeleccionado.documentos) {
+        try {
+            documentos = JSON.parse(vehiculoSeleccionado.documentos);
+        } catch (e) {
+            documentos = [];
+        }
+    }
 
-    if (error || !documentos || documentos.length === 0) {
+    if (!Array.isArray(documentos) || documentos.length === 0) {
         contenedor.innerHTML = `<p style="color: #64748b; font-size: 0.85rem; margin:0;">No hay documentos digitales cargados para este auto.</p>`;
         return;
     }
@@ -304,16 +316,16 @@ async function consultarDocumentosAuto() {
     contenedor.innerHTML = '';
     documentos.forEach(doc => {
         const link = document.createElement('a');
-        link.href = doc.url_archivo;
+        link.href = doc.url;
         link.target = '_blank';
         link.style.cssText = "background: #334155; color: #fbbf24; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; text-decoration: none; display: flex; align-items: center; gap: 5px; font-weight: bold; border: 1px solid #475569;";
-        link.innerHTML = `<span class="material-icons" style="font-size:1rem;">description</span> ${doc.nombre_documento}`;
+        link.innerHTML = `<span class="material-icons" style="font-size:1rem;">description</span> ${doc.nombre}`;
         contenedor.appendChild(link);
     });
 }
 
 // ==========================================
-// SECCIÓN: LÓGICA DE SERVICES (HISTORIAL)
+// SECCIÓN: LÓGICA DE SERVICES (COLUMNA NATIVA 'services')
 // ==========================================
 async function registrarServiceVehiculo() {
     const tarea = document.getElementById('srv-tarea').value.trim();
@@ -325,36 +337,52 @@ async function registrarServiceVehiculo() {
         return;
     }
 
-    const { error } = await supabaseClient.from('services_vehiculos').insert([{
-        vehiculo_id: vehiculoSeleccionadoId,
+    let listaServices = [];
+    if (vehiculoSeleccionado.services) {
+        listaServices = Array.isArray(vehiculoSeleccionado.services) 
+            ? vehiculoSeleccionado.services 
+            : (typeof vehiculoSeleccionado.services === 'string' ? JSON.parse(vehiculoSeleccionado.services) : []);
+    }
+
+    // Creamos el nuevo registro
+    const nuevoService = {
         tarea_realizada: tarea,
         kilometraje: km,
         observaciones: notas || null,
-        registrado_por: usuarioActual?.email || "Chofer"
-    }]);
+        registrado_por: usuarioActual?.email || "Chofer",
+        fecha: new Date().toLocaleDateString('es-AR')
+    };
+
+    listaServices.unshift(nuevoService); // Lo agregamos al principio del historial
+
+    // Actualizamos la columna jsonb 'services'
+    const { error } = await supabaseClient
+        .from('vehiculos')
+        .update({ services: listaServices })
+        .eq('id', vehiculoSeleccionado.id);
 
     if (error) {
         alert("Error al registrar el service: " + error.message);
     } else {
         alert("Service asentado en el historial de la unidad.");
+        vehiculoSeleccionado.services = listaServices;
         document.getElementById('srv-tarea').value = '';
         document.getElementById('srv-km').value = '';
         document.getElementById('srv-notas').value = '';
-        consultarServicesAuto();
+        mostrarServicesAuto();
     }
 }
 
-async function consultarServicesAuto() {
+function mostrarServicesAuto() {
     const contenedor = document.getElementById('services-tabla-lista');
     if (!contenedor) return;
 
-    const { data: mantes, error } = await supabaseClient
-        .from('services_vehiculos')
-        .select('*')
-        .eq('vehiculo_id', vehiculoSeleccionadoId)
-        .order('created_at', { ascending: false });
+    let mantes = vehiculoSeleccionado.services || [];
+    if (typeof mantes === 'string') {
+        try { mantes = JSON.parse(mantes); } catch(e) { mantes = []; }
+    }
 
-    if (error || !mantes || mantes.length === 0) {
+    if (!Array.isArray(mantes) || mantes.length === 0) {
         contenedor.innerHTML = `<p style="color: #64748b; font-size: 0.85rem; margin:0;">Sin registros de mantenimiento previos.</p>`;
         return;
     }
@@ -364,15 +392,13 @@ async function consultarServicesAuto() {
         const fila = document.createElement('div');
         fila.style.cssText = "background: #111827; padding: 8px; border-radius: 6px; border-left: 3px solid #10b981; font-size: 0.8rem; color: #e2e8f0;";
         
-        const fecha = s.created_at ? new Date(s.created_at).toLocaleDateString('es-AR') : '---';
-        
         fila.innerHTML = `
             <div style="display:flex; justify-content: space-between; font-weight: bold; margin-bottom: 2px; color: #fff;">
                 <span>${s.tarea_realizada}</span>
                 <span style="color: #34d399;">${s.kilometraje} KM</span>
             </div>
             <div style="color: #94a3b8; font-size: 0.75rem;">
-                Fecha: ${fecha} | Por: ${s.registrado_por.split('@')[0]}
+                Fecha: ${s.fecha || '---'} | Por: ${s.registrado_por ? s.registrado_por.split('@')[0] : 'Chofer'}
             </div>
             ${s.observaciones ? `<div style="margin-top: 3px; color: #cbd5e1; font-style: italic;">Obs: ${s.observaciones}</div>` : ''}
         `;
@@ -381,56 +407,8 @@ async function consultarServicesAuto() {
 }
 
 // ==========================================
-// FUNCIONES RESTANTES INTACTAS Y FUNCIONALES
+// REPORTE DE JORNADAS (CORREGIDO CON PATENTE Y CHOFER OBLIGATORIOS)
 // ==========================================
-async function agregarVehiculo() {
-    const patente = document.getElementById('admin-patente').value.trim().toUpperCase();
-    const modelo = document.getElementById('admin-modelo').value.trim();
-
-    if (!patente) {
-        alert("Escriba la patente del auto.");
-        return;
-    }
-
-    const { error } = await supabaseClient.from('vehiculos').insert([{ patente, modelo }]);
-
-    if (error) {
-        alert("Error al guardar auto: " + error.message);
-    } else {
-        alert("Vehículo guardado correctamente.");
-        document.getElementById('admin-patente').value = '';
-        document.getElementById('admin-modelo').value = '';
-        cargarVehiculos();
-    }
-}
-
-async function eliminarVehiculoCompleto(idVehiculo, patente) {
-    const confirmar = confirm(`¿Estás seguro de eliminar el vehículo ${patente}?\nSe borrarán todos los reportes asociados.`);
-    if (!confirmar) return;
-
-    await supabaseClient.from('reportes_jornadas').delete().eq('vehiculo_id', idVehiculo);
-    await supabaseClient.from('documentos_vehiculos').delete().eq('vehiculo_id', idVehiculo);
-    await supabaseClient.from('services_vehiculos').delete().eq('vehiculo_id', idVehiculo);
-    
-    const { error: errorVehiculo } = await supabaseClient.from('vehiculos').delete().eq('id', idVehiculo);
-
-    if (errorVehiculo) {
-        alert("Error al eliminar el vehículo: " + errorVehiculo.message);
-    } else {
-        alert(`Vehículo ${patente} eliminado.`);
-        cargarVehiculos();
-    }
-}
-
-async function eliminarReporteIndividual(idReporte) {
-    const confirmar = confirm("¿Estás seguro de eliminar este reporte?");
-    if (!confirmar) return;
-
-    const { error } = await supabaseClient.from('reportes_jornadas').delete().eq('id', idReporte);
-    if (error) alert("Error: " + error.message);
-    else { alert("Reporte eliminado."); cargarReportesParaAdmin(); }
-}
-
 async function enviarReporte() {
     const tipo = document.getElementById('reporte-tipo').value;
     const kilometraje = parseInt(document.getElementById('reporte-km').value);
@@ -461,19 +439,26 @@ async function enviarReporte() {
         }
     }
 
+    // CORRECCIÓN CRÍTICA: Se inyectan de forma obligatoria las columnas 'patente' y 'chofer'
     const { error } = await supabaseClient.from('reportes_jornadas').insert([{
         tipo,
         kilometraje,
         combustible,
         novedades: novedades || null,
-        fotos_perimetro: urlsFotos,
-        vehiculo_id: vehiculoSeleccionadoId
+        fotos_perimetro: JSON.stringify(urlsFotos),
+        vehiculo_id: vehiculoSeleccionado.id,
+        patente: vehiculoSeleccionado.patente, // Requerido por la base de datos
+        chofer: usuarioActual?.email || "Chofer Anónimo" // Requerido por la base de datos
     }]);
 
     if (error) {
         alert("Error al enviar el reporte: " + error.message);
     } else {
         alert("Reporte guardado con éxito.");
+        
+        // Actualizamos dinámicamente el kilometraje en la tabla vehiculos para mantener el estado real
+        await supabaseClient.from('vehiculos').update({ km_actual: kilometraje }).eq('id', vehiculoSeleccionado.id);
+        
         document.getElementById('reporte-km').value = '';
         document.getElementById('reporte-novedades').value = '';
         if (inputFotos) inputFotos.value = '';
@@ -481,6 +466,55 @@ async function enviarReporte() {
     }
 }
 
+// AGREGAR VEHÍCULO (ADMIN)
+async function agregarVehiculo() {
+    const patente = document.getElementById('admin-patente').value.trim().toUpperCase();
+    const modelo = document.getElementById('admin-modelo').value.trim();
+
+    if (!patente) {
+        alert("Escriba la patente del auto.");
+        return;
+    }
+
+    const { error } = await supabaseClient.from('vehiculos').insert([{ patente, modelo, documentos: "[]", services: [] }]);
+
+    if (error) {
+        alert("Error al guardar auto: " + error.message);
+    } else {
+        alert("Vehículo guardado correctamente.");
+        document.getElementById('admin-patente').value = '';
+        document.getElementById('admin-modelo').value = '';
+        cargarVehiculos();
+    }
+}
+
+// ELIMINAR VEHÍCULO COMPLETAMENTE
+async function eliminarVehiculoCompleto(idVehiculo, patente) {
+    const confirmar = confirm(`¿Estás seguro de eliminar el vehículo ${patente}?\nSe borrarán todos los reportes asociados.`);
+    if (!confirmar) return;
+
+    await supabaseClient.from('reportes_jornadas').delete().eq('vehiculo_id', idVehiculo);
+    const { error: errorVehiculo } = await supabaseClient.from('vehiculos').delete().eq('id', idVehiculo);
+
+    if (errorVehiculo) {
+        alert("Error al eliminar el vehículo: " + errorVehiculo.message);
+    } else {
+        alert(`Vehículo ${patente} eliminado.`);
+        cargarVehiculos();
+    }
+}
+
+// ELIMINAR UN REPORTE INDIVIDUAL (ADMIN)
+async function eliminarReporteIndividual(idReporte) {
+    const confirmar = confirm("¿Estás seguro de eliminar este reporte?");
+    if (!confirmar) return;
+
+    const { error } = await supabaseClient.from('reportes_jornadas').delete().eq('id', idReporte);
+    if (error) alert("Error: " + error.message);
+    else { alert("Reporte eliminado."); cargarReportesParaAdmin(); }
+}
+
+// PANEL ADMINISTRADOR DE HISTORIAL
 async function cargarReportesParaAdmin() {
     const contenedor = document.getElementById('lista-reportes-admin');
     if (!contenedor) return;
@@ -489,8 +523,6 @@ async function cargarReportesParaAdmin() {
         .from('reportes_jornadas')
         .select('*')
         .order('created_at', { ascending: false });
-
-    const { data: vehiculos } = await supabaseClient.from('vehiculos').select('*');
 
     if (errorReportes) {
         contenedor.innerHTML = `<p style="color: #ef4444;">No se pudieron cargar los reportes.</p>`;
@@ -502,15 +534,9 @@ async function cargarReportesParaAdmin() {
         return;
     }
 
-    const mapaVehiculos = {};
-    if (vehiculos) {
-        vehiculos.forEach(v => { mapaVehiculos[v.id] = `${v.patente} - ${v.modelo || ''}`; });
-    }
-
     const reportesAgrupados = {};
     reportes.forEach(reporte => {
-        const idVehiculo = reporte.vehiculo_id || 'sin_id';
-        const nombreAuto = mapaVehiculos[idVehiculo] || 'Unidad No Identificada';
+        const nombreAuto = reporte.patente || 'Unidad No Identificada';
         if (!reportesAgrupados[nombreAuto]) reportesAgrupados[nombreAuto] = [];
         reportesAgrupados[nombreAuto].push(reporte);
     });
@@ -562,6 +588,7 @@ async function cargarReportesParaAdmin() {
                     <span style="font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background-color: ${reporte.tipo === 'Inicio' ? '#064e3b' : '#78350f'}; color: ${reporte.tipo === 'Inicio' ? '#34d399' : '#fbbf24'};">${reporte.tipo}</span>
                     <span style="font-size: 0.8rem; color: var(--texto-gris);">${fechaStr}</span>
                 </div>
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 5px;"><strong>Chofer:</strong> ${reporte.chofer || '---'}</div>
                 <div style="font-size: 0.9rem; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; color: #cbd5e1;">
                     <p style="margin: 0;"><strong>KM:</strong> ${reporte.kilometraje || '---'}</p>
                     <p style="margin: 0;"><strong>Combustible:</strong> ${reporte.combustible || '---'}</p>
@@ -578,10 +605,11 @@ async function cargarReportesParaAdmin() {
     }
 }
 
+// CERRAR SESIÓN
 async function cerrarSesion() {
     await supabaseClient.auth.signOut();
     usuarioActual = null;
-    vehiculoSeleccionadoId = null;
+    vehiculoSeleccionado = null;
     document.getElementById('btn-logout').style.display = 'none';
     document.getElementById('menu-navegacion').style.display = 'none';
     cambiarVista('vista-login');
