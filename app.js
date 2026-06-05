@@ -1,3 +1,9 @@
+// Herramienta de diagnóstico para el celular
+window.onerror = function(message, source, lineno, colno, error) {
+    alert("¡Error de JS en el celu!\n\n" + message + "\n\nLínea: " + lineno);
+    return false;
+};
+
 // CONFIGURACIÓN DE SUPABASE REAL Y VERIFICADA
 const SUPABASE_URL = "https://toqauhxdcyggnsejjijk.supabase.co"; 
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvcWF1aHhkY3lnZ25zZWpqaWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDU4MzQsImV4cCI6MjA5NjA4MTgzNH0.Eb2u6O10ulBv20OoKvwaE64aqwEQzU80GnkbNd8Tp0I"; 
@@ -6,7 +12,8 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // VARIABLES GLOBALES DE CONTROL
 let usuarioActual = null;
-let vehiculoSeleccionado = null; // Guardamos el objeto completo del auto
+let vehiculoSeleccionado = null; 
+let jornadasCargadasVehiculo = []; // Guardará las jornadas del vehículo activo para el PDF
 window.vistaActual = 'vista-login';
 
 // EVENTOS AL CARGAR LA PÁGINA
@@ -15,6 +22,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
     document.getElementById('btn-agregar-vehiculo').addEventListener('click', agregarVehiculo);
     document.getElementById('btn-enviar-reporte').addEventListener('click', enviarReporte);
+
+    // Conexión de filtros y PDF en tiempo real (Vista Admin General)
+    const filtroPatente = document.getElementById('filtro-patente');
+    const filtroFecha = document.getElementById('filtro-fecha');
+    const filtroMes = document.getElementById('filtro-mes');
+    const btnLimpiar = document.getElementById('btn-limpiar-filtros');
+    const btnPdf = document.getElementById('btn-descargar-pdf');
+
+    if (filtroPatente) filtroPatente.addEventListener('input', filtrarReportes);
+    if (filtroFecha) filtroFecha.addEventListener('change', filtrarReportes);
+    if (filtroMes) filtroMes.addEventListener('change', filtrarReportes);
+    if (btnLimpiar) btnLimpiar.addEventListener('click', limpiarFiltros);
+    if (btnPdf) btnPdf.addEventListener('click', generarPDFAdminTexto);
 
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (user) {
@@ -123,7 +143,7 @@ async function cargarVehiculos() {
         item.className = 'card-vehiculo';
         
         const rolUsuario = usuarioActual?.user_metadata?.rol || 'chofer';
-        let botonEliminarAutoHtml = '';
+        let botonEliminarAutoHtml = ''; // CORREGIDO: Se eliminó la palabra fantasma '永久'
         
         if (rolUsuario === 'admin') {
             botonEliminarAutoHtml = `
@@ -156,9 +176,9 @@ async function cargarVehiculos() {
     });
 }
 
-// ABRE EL REPORTE E INYECTA LOS CONTENEDORES DE DOCUMENTOS Y SERVICES (USANDO LA ESTRUCTURA NATIVA)
+// ABRE EL REPORTE E INYECTA LOS CONTENEDORES DE DOCUMENTOS, SERVICES Y JORNADAS
 async function abrirPanelReporteVehiculo(auto) {
-    vehiculoSeleccionado = auto; // Guardamos el objeto completo del auto activo
+    vehiculoSeleccionado = auto; 
     document.getElementById('reporte-titulo').innerText = `Reporte Unidad: ${auto.patente}`;
     
     const vistaReporte = document.getElementById('vista-reporte');
@@ -211,7 +231,7 @@ async function abrirPanelReporteVehiculo(auto) {
                     <input type="text" id="srv-tarea" placeholder="Ej: Cambio Aceite y Filtros" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
                     <input type="number" id="srv-km" placeholder="Kilometraje del Service" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
                 </div>
-                <input type="text" id="srv-notes" id="srv-notas" placeholder="Observaciones o taller (Opcional)" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
+                <input type="text" id="srv-notas" placeholder="Observaciones o taller (Opcional)" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
                 <button id="btn-guardar-service" style="background: #10b981; color: #fff; border: none; padding: 6px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.85rem;">Guardar Registro de Taller</button>
             </div>
 
@@ -219,29 +239,46 @@ async function abrirPanelReporteVehiculo(auto) {
         </div>
     `;
 
-    contenedorDinamico.innerHTML = htmlDocumentos + htmlServices;
+    // 3. NUEVA MEJORA: Estructura para buscar y ver las Jornadas del Vehículo en Pantalla
+    let htmlJornadasVisor = `
+        <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #475569; padding-bottom: 5px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="material-icons" style="color: var(--celeste);">assignment</span>
+                    <h3 style="margin:0; font-size: 1.1rem; color: #fff;">Historial de Jornadas de la Unidad</h3>
+                </div>
+                <button id="btn-pdf-jornadas-unidad" style="background: #e11d48; color: #fff; border: none; padding: 5px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.75rem; display: flex; align-items: center; gap: 4px;">
+                    <span class="material-icons" style="font-size: 0.9rem;">download</span> PDF (Solo Texto)
+                </button>
+            </div>
+            <div id="jornadas-unidad-lista" style="max-height: 350px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
+                <p style="color: #64748b; font-size: 0.85rem; margin:0;">Cargando historial de rutas...</p>
+            </div>
+        </div>
+    `;
+
+    contenedorDinamico.innerHTML = htmlDocumentos + htmlServices + htmlJornadasVisor;
 
     if (rolUsuario === 'admin') {
         document.getElementById('btn-guardar-documento').addEventListener('click', subirDocumentacionAuto);
     }
     document.getElementById('btn-guardar-service').addEventListener('click', registrarServiceVehiculo);
+    document.getElementById('btn-pdf-jornadas-unidad').addEventListener('click', generarPDFJornadasUnidadTexto);
 
-    // Mostrar los datos que ya contiene el objeto del vehículo
     mostrarDocumentosAuto();
     mostrarServicesAuto();
+    cargarYMostrarJornadasUnidad(auto.id, auto.patente); // Ejecuta la consulta y dibuja en pantalla
 
     cambiarVista('vista-reporte');
 }
 
-// ==========================================
-// SECCIÓN: LÓGICA DE DOCUMENTACIÓN (COLUMNA NATIVA 'documentos')
-// ==========================================
+// SECCIÓN: LÓGICA DE DOCUMENTACIÓN
 async function subirDocumentacionAuto() {
     const nombreTipo = document.getElementById('doc-nombre-tipo').value.trim();
     const archivoInput = document.getElementById('doc-archivo-file');
 
     if (!nombreTipo || !archivoInput.files || archivoInput.files.length === 0) {
-        alert("Completá el nombre del documento y seleccioná un archivo.");
+        alert("Completá el nombre del documento and seleccioná un archivo.");
         return;
     }
 
@@ -249,7 +286,6 @@ async function subirDocumentacionAuto() {
     const extension = file.name.split('.').pop();
     const nombreArchivoStorage = `docs_${vehiculoSeleccionado.id}_${Date.now()}.${extension}`;
 
-    // Subida al bucket 'flota'
     const { data: uploadData, error: errorUpload } = await supabaseClient.storage
         .from('flota')
         .upload(nombreArchivoStorage, file);
@@ -261,7 +297,6 @@ async function subirDocumentacionAuto() {
 
     const { data: linkPublico } = supabaseClient.storage.from('flota').getPublicUrl(nombreArchivoStorage);
 
-    // Interpretamos los documentos existentes
     let listaDocumentos = [];
     if (vehiculoSeleccionado.documentos) {
         try {
@@ -272,13 +307,11 @@ async function subirDocumentacionAuto() {
         }
     }
 
-    // Sumamos el nuevo documento al array
     listaDocumentos.push({
         nombre: nombreTipo,
         url: linkPublico.publicUrl
     });
 
-    // Guardamos la actualización en la columna 'documentos' de la tabla 'vehiculos'
     const { error: errorUpdate } = await supabaseClient
         .from('vehiculos')
         .update({ documentos: JSON.stringify(listaDocumentos) })
@@ -324,9 +357,7 @@ function mostrarDocumentosAuto() {
     });
 }
 
-// ==========================================
-// SECCIÓN: LÓGICA DE SERVICES (COLUMNA NATIVA 'services')
-// ==========================================
+// SECCIÓN: LÓGICA DE SERVICES
 async function registrarServiceVehiculo() {
     const tarea = document.getElementById('srv-tarea').value.trim();
     const km = parseInt(document.getElementById('srv-km').value);
@@ -344,7 +375,6 @@ async function registrarServiceVehiculo() {
             : (typeof vehiculoSeleccionado.services === 'string' ? JSON.parse(vehiculoSeleccionado.services) : []);
     }
 
-    // Creamos el nuevo registro
     const nuevoService = {
         tarea_realizada: tarea,
         kilometraje: km,
@@ -353,9 +383,8 @@ async function registrarServiceVehiculo() {
         fecha: new Date().toLocaleDateString('es-AR')
     };
 
-    listaServices.unshift(nuevoService); // Lo agregamos al principio del historial
+    listaServices.unshift(nuevoService);
 
-    // Actualizamos la columna jsonb 'services' de forma directa para compatibilidad nativa
     const { error } = await supabaseClient
         .from('vehiculos')
         .update({ services: listaServices })
@@ -406,16 +435,179 @@ function mostrarServicesAuto() {
     });
 }
 
-// ==========================================
-// REPORTE DE JORNADAS (CORREGIDO ERROR ARRAY Y ADICIÓN DE TICKET)
-// ==========================================
+// NUEVA MEJORA: CONSULTA DE JORNADAS EN PANTALLA PARA EL VEHÍCULO SELECCIONADO
+async function cargarYMostrarJornadasUnidad(vehiculoId, patente) {
+    const contenedor = document.getElementById('jornadas-unidad-lista');
+    if (!contenedor) return;
+
+    const { data: reportes, error } = await supabaseClient
+        .from('reportes_jornadas')
+        .select('*')
+        .eq('vehiculo_id', vehiculoId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        contenedor.innerHTML = `<p style="color: #ef4444; font-size:0.85rem;">Error al cargar jornadas: ${error.message}</p>`;
+        return;
+    }
+
+    jornadasCargadasVehiculo = reportes || []; // Guardamos en memoria global para el generador de PDF
+
+    if (jornadasCargadasVehiculo.length === 0) {
+        contenedor.innerHTML = `<p style="color: #64748b; font-size: 0.85rem; margin:0; font-style: italic;">No hay jornadas registradas para este vehículo.</p>`;
+        return;
+    }
+
+    contenedor.innerHTML = '';
+    jornadasCargadasVehiculo.forEach(rep => {
+        const tarjeta = document.createElement('div');
+        tarjeta.style.cssText = "background: #111827; padding: 10px; border-radius: 6px; border-left: 4px solid " + (rep.tipo === 'Inicio' ? 'var(--verde-inicio, #10b981)' : 'var(--naranja-fin, #f97316)') + "; color: #e2e8f0; font-size: 0.8rem;";
+        
+        const fechaStr = rep.created_at ? new Date(rep.created_at).toLocaleString('es-AR') : 'Sin fecha';
+
+        // Procesar fotos de perímetro para descarga
+        let btnFotosDescargaHtml = '';
+        if (rep.fotos_perimetro) {
+            try {
+                const listaFotos = typeof rep.fotos_perimetro === 'string' ? JSON.parse(rep.fotos_perimetro) : rep.fotos_perimetro;
+                if (Array.isArray(listaFotos) && listaFotos.length > 0) {
+                    btnFotosDescargaHtml = `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">`;
+                    listaFotos.forEach((url, i) => {
+                        btnFotosDescargaHtml += `
+                            <button onclick="window.descargarArchivoDispositivo('${url}', 'Foto_Perimetro_${patente}_${i+1}.jpg')" style="background:#334155; color:#38bdf8; border:none; padding:4px 8px; border-radius:4px; font-size:0.7rem; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:3px;">
+                                <span class="material-icons" style="font-size:0.85rem;">file_download</span> Descargar Foto ${i+1}
+                            </button>
+                        `;
+                    });
+                    btnFotosDescargaHtml += `</div>`;
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        // Procesar ticket de combustible para descarga
+        let btnTicketDescargaHtml = '';
+        if (rep.ticket_combustible) {
+            btnTicketDescargaHtml = `
+                <div style="margin-top:6px; padding-top:4px; border-top:1px dashed #334155;">
+                    <button onclick="window.descargarArchivoDispositivo('${rep.ticket_combustible}', 'Ticket_Combustible_${patente}.jpg')" style="background:#334155; color:#fbbf24; border:none; padding:4px 8px; border-radius:4px; font-size:0.7rem; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:3px;">
+                        <span class="material-icons" style="font-size:0.85rem;">receipt</span> Descargar Ticket Combustible
+                    </button>
+                </div>
+            `;
+        }
+
+        tarjeta.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; margin-bottom:4px;">
+                <span style="background:" + (rep.tipo === 'Inicio' ? '#064e3b' : '#78350f') + "; color:" + (rep.tipo === 'Inicio' ? '#34d399' : '#fbbf24') + "; padding:2px 6px; border-radius:4px; font-size:0.75rem;">${rep.tipo}</span>
+                <span style="color:#94a3b8; font-size:0.75rem;">${fechaStr}</span>
+            </div>
+            <div style="color:#cbd5e1; margin-bottom:3px;"><strong>Chofer:</strong> ${rep.chofer || '---'}</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-bottom:4px; background:#1f2937; padding:5px; border-radius:4px;">
+                <span><strong>KM:</strong> ${rep.kilometraje || '---'}</span>
+                <span><strong>Nafta:</strong> ${rep.combustible || '---'}</span>
+            </div>
+            <div><strong>Novedades:</strong> ${rep.novedades || 'Ninguna'}</div>
+            ${btnFotosDescargaHtml}
+            ${btnTicketDescargaHtml}
+        `;
+        contenedor.appendChild(tarjeta);
+    });
+}
+
+// NUEVA MEJORA: HERRAMIENTA ROBUSTA PARA DESCARGAR IMÁGENES/ARCHIVOS EN EL DISPOSITIVO
+window.descargarArchivoDispositivo = async function(url, nombreArchivo) {
+    try {
+        const respuesta = await fetch(url);
+        const blob = await respuesta.blob();
+        const urlBlob = URL.createObjectURL(blob);
+        
+        const enlace = document.createElement('a');
+        enlace.href = urlBlob;
+        enlace.download = nombreArchivo;
+        document.body.appendChild(enlace);
+        enlace.click();
+        
+        document.body.removeChild(enlace);
+        URL.revokeObjectURL(urlBlob);
+    } catch (error) {
+        console.warn("Falla de CORS al descargar directo, abriendo en pestaña para guardar manual:", error);
+        window.open(url, '_blank');
+    }
+};
+
+// NUEVA MEJORA: GENERAR PDF DE JORNADAS DE UN VEHÍCULO ESPECÍFICO (FORMATO TEXTO, SIN IMÁGENES)
+function generarPDFJornadasUnidadTexto() {
+    if (!jornadasCargadasVehiculo || jornadasCargadasVehiculo.length === 0) {
+        alert("No hay datos de jornadas disponibles en pantalla para exportar.");
+        return;
+    }
+
+    if (!window.jspdf) {
+        alert("Error: La librería jsPDF no está cargada. Por favor agregá el script en tu HTML.");
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const patente = vehiculoSeleccionado?.patente || 'UNIDAD';
+
+    // Encabezado
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text(`HISTORIAL DE JORNADAS - UNIDAD: ${patente}`, 14, 18);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Fecha de Reporte: ${new Date().toLocaleString('es-AR')}`, 14, 25);
+    doc.line(14, 28, 196, 28);
+
+    let lineaY = 36;
+    const alturaPagina = doc.internal.pageSize.height;
+
+    jornadasCargadasVehiculo.forEach((j, index) => {
+        // Control de salto de página inteligente
+        if (lineaY > alturaPagina - 40) {
+            doc.addPage();
+            lineaY = 20;
+        }
+
+        const fecha = j.created_at ? new Date(j.created_at).toLocaleString('es-AR') : '---';
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text(`${index + 1}. Registro de ${j.tipo} — ${fecha}`, 14, lineaY);
+        lineaY += 6;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.text(`Chofer: ${j.chofer || '---'}`, 14, lineaY);
+        lineaY += 5;
+        doc.text(`Kilometraje: ${j.kilometraje || '---'} KM | Nivel Combustible: ${j.combustible || '---'}`, 14, lineaY);
+        lineaY += 5;
+
+        // Ajuste automático de renglones para las novedades por si son largas
+        const textoNov = `Novedades/Notas: ${j.novedades || 'Ninguna'}`;
+        const parrafoDividido = doc.splitTextToSize(textoNov, 180);
+        doc.text(parrafoDividido, 14, lineaY);
+        lineaY += (parrafoDividido.length * 5) + 3;
+
+        // Separador fino entre tarjetas
+        doc.setDrawColor(200, 200, 200);
+        doc.line(14, lineaY - 1, 196, lineaY - 1);
+        lineaY += 6;
+    });
+
+    doc.save(`Jornadas_Texto_${patente}_${Date.now()}.pdf`);
+}
+
+// REPORTE DE JORNADAS (ENVÍO)
 async function enviarReporte() {
     const tipo = document.getElementById('reporte-tipo').value;
     const kilometraje = parseInt(document.getElementById('reporte-km').value);
     const combustible = document.getElementById('reporte-combustible').value;
     const novedades = document.getElementById('reporte-novedades').value.trim();
     const inputFotos = document.getElementById('reporte-fotos');
-    const inputTicket = document.getElementById('reporte-ticket-combustible'); // Captura del nuevo input
+    const inputTicket = document.getElementById('reporte-ticket-combustible');
 
     if (!kilometraje) {
         alert("Por favor ingrese el kilometraje actual.");
@@ -424,7 +616,6 @@ async function enviarReporte() {
 
     let urlsFotos = [];
 
-    // 1. Subida de fotos del perímetro
     if (inputFotos && inputFotos.files.length > 0) {
         for (let i = 0; i < inputFotos.files.length; i++) {
             const archivo = inputFotos.files[i];
@@ -441,7 +632,6 @@ async function enviarReporte() {
         }
     }
 
-    // 2. Subida del ticket de combustible opcional
     let urlTicket = null;
     if (inputTicket && inputTicket.files.length > 0) {
         const archivoTicket = inputTicket.files[0];
@@ -457,14 +647,13 @@ async function enviarReporte() {
         }
     }
 
-    // CORRECCIÓN CRÍTICA: fotos_perimetro va como array nativo (sin JSON.stringify) para sanar el "malformed array literal"
     const { error } = await supabaseClient.from('reportes_jornadas').insert([{
         tipo,
         kilometraje,
         combustible,
         novedades: novedades || null,
-        fotos_perimetro: urlsFotos, // REPARADO: Sin JSON.stringify
-        ticket_combustible: urlTicket, // NUEVO REGISTRO ASOCIADO
+        fotos_perimetro: urlsFotos, 
+        ticket_combustible: urlTicket, 
         vehiculo_id: vehiculoSeleccionado.id,
         patente: vehiculoSeleccionado.patente, 
         chofer: usuarioActual?.email || "Chofer Anónimo" 
@@ -475,13 +664,12 @@ async function enviarReporte() {
     } else {
         alert("Reporte guardado con éxito.");
         
-        // Actualizamos dinámicamente el kilometraje en la tabla vehiculos para mantener el estado real
         await supabaseClient.from('vehiculos').update({ km_actual: kilometraje }).eq('id', vehiculoSeleccionado.id);
         
         document.getElementById('reporte-km').value = '';
         document.getElementById('reporte-novedades').value = '';
         if (inputFotos) inputFotos.value = '';
-        if (inputTicket) inputTicket.value = ''; // Limpiamos el nuevo input
+        if (inputTicket) inputTicket.value = ''; 
         cambiarVista('vista-flota');
     }
 }
@@ -534,7 +722,7 @@ async function eliminarReporteIndividual(idReporte) {
     else { alert("Reporte eliminado."); cargarReportesParaAdmin(); }
 }
 
-// PANEL ADMINISTRADOR DE HISTORIAL
+// PANEL ADMINISTRADOR DE HISTORIAL GENERAL
 async function cargarReportesParaAdmin() {
     const contenedor = document.getElementById('lista-reportes-admin');
     if (!contenedor) return;
@@ -565,7 +753,6 @@ async function cargarReportesParaAdmin() {
 
     for (const [auto, listaDeReportes] of Object.entries(reportesAgrupados)) {
         const bloqueAuto = document.createElement('div');
-        // Agregamos una clase al contenedor del auto para poder ocultarlo de forma elegante si no hay coincidencias
         bloqueAuto.className = 'bloque-vehiculo-grupo';
         bloqueAuto.style.cssText = "margin-bottom: 25px; border: 1px solid #334155; border-radius: 10px; padding: 15px; background-color: #111827;";
 
@@ -581,8 +768,6 @@ async function cargarReportesParaAdmin() {
 
         listaDeReportes.forEach(reporte => {
             const tarjeta = document.createElement('div');
-            
-            // SOLUCIÓN AL CONSEJO: Vinculamos la clase y los datos para el buscador dinámico
             tarjeta.className = 'card-reporte';
             const fechaISO = reporte.created_at ? reporte.created_at.split('T')[0] : '';
             tarjeta.setAttribute('data-patente', auto.trim().toLowerCase());
@@ -652,14 +837,13 @@ async function cerrarSesion() {
     await supabaseClient.auth.signOut();
     usuarioActual = null;
     vehiculoSeleccionado = null;
+    jornadasCargadasVehiculo = [];
     document.getElementById('btn-logout').style.display = 'none';
     document.getElementById('menu-navegacion').style.display = 'none';
     cambiarVista('vista-login');
 }
 
-// ==========================================
-// 1. REGISTRO DE LA PWA (INSTALABLE)
-// ==========================================
+// REGISTRO DE LA PWA (INSTALABLE)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
@@ -668,72 +852,106 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ==========================================
-// 2. FILTRADO MULTIPLE AVANZADO EN TIEMPO REAL (ADMIN)
-// ==========================================
+// FILTRADO MÚLTIPLE AVANZADO EN TIEMPO REAL (ADMIN GENERAL)
 const filtrarReportes = () => {
-  const patenteBuscada = document.getElementById('filtro-patente').value.toLowerCase().trim();
-  const fechaBuscada = document.getElementById('filtro-fecha').value;
-  const mesBuscado = document.getElementById('filtro-mes').value; // Retorna "YYYY-MM"
+    const patenteBuscada = document.getElementById('filtro-patente').value.toLowerCase().trim();
+    const fechaBuscada = document.getElementById('filtro-fecha').value;
+    const mesBuscado = document.getElementById('filtro-mes').value; 
 
-  // Seleccionamos cada bloque agrupado por auto
-  const gruposVehiculos = document.querySelectorAll('.bloque-vehiculo-grupo');
+    const gruposVehiculos = document.querySelectorAll('.bloque-vehiculo-grupo');
 
-  gruposVehiculos.forEach(grupo => {
-    const reportes = grupo.querySelectorAll('.card-reporte');
-    let algunaTarjetaVisible = false;
+    gruposVehiculos.forEach(grupo => {
+        const reportes = grupo.querySelectorAll('.card-reporte');
+        let algunaTarjetaVisible = false;
 
-    reportes.forEach(reporte => {
-      const patente = reporte.getAttribute('data-patente') || '';
-      const fecha = reporte.getAttribute('data-fecha') || ''; // "YYYY-MM-DD"
-      
-      let coincide = true;
+        reportes.forEach(reporte => {
+            const patente = reporte.getAttribute('data-patente') || '';
+            const fecha = reporte.getAttribute('data-fecha') || ''; 
+            
+            let coincide = true;
 
-      if (patenteBuscada && !patente.includes(patenteBuscada)) coincide = false;
-      if (fechaBuscada && fecha !== fechaBuscada) coincide = false;
-      if (mesBuscado && !fecha.startsWith(mesBuscado)) coincide = false;
+            if (patenteBuscada && !patente.includes(patenteBuscada)) coincide = false;
+            if (fechaBuscada && fecha !== fechaBuscada) coincide = false;
+            if (mesBuscado && !fecha.startsWith(mesBuscado)) coincide = false;
 
-      reporte.style.display = coincide ? 'block' : 'none';
-      
-      if (coincide) {
-        algunaTarjetaVisible = true;
-      }
+            reporte.style.display = coincide ? 'block' : 'none';
+            
+            if (coincide) {
+                algunaTarjetaVisible = true;
+            }
+        });
+
+        grupo.style.display = algunaTarjetaVisible ? 'block' : 'none';
     });
-
-    // Si ninguna tarjeta de este auto coincide, ocultamos el bloque entero (recuadro y título)
-    grupo.style.display = algunaTarjetaVisible ? 'block' : 'none';
-  });
 };
 
-// Escuchas de eventos para filtrar dinámicamente mientras se escribe o selecciona
-document.getElementById('filtro-patente').addEventListener('input', filtrarReportes);
-document.getElementById('filtro-fecha').addEventListener('change', filtrarReportes);
-document.getElementById('filtro-mes').addEventListener('change', filtrarReportes);
+// COMPLETADO: Función para restaurar filtros vacíos
+const limpiarFiltros = () => {
+    document.getElementById('filtro-patente').value = '';
+    document.getElementById('filtro-fecha').value = '';
+    document.getElementById('filtro-mes').value = '';
+    filtrarReportes();
+};
 
-document.getElementById('btn-limpiar-filtros').addEventListener('click', () => {
-  document.getElementById('filtro-patente').value = '';
-  document.getElementById('filtro-fecha').value = '';
-  document.getElementById('filtro-mes').value = '';
-  filtrarReportes();
-});
+// NUEVA MEJORA: GENERAR PDF TEXTUAL DESDE LA VISTA GENERAL DE ADMIN (RESPETA LOS FILTROS DE PANTALLA)
+function generarPDFAdminTexto() {
+    if (!window.jspdf) {
+        alert("Librería jsPDF no detectada.");
+        return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("REPORTE CONSOLIDADO DE JORNADAS (FILTRADO)", 14, 18);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Generado el: ${new Date().toLocaleString('es-AR')}`, 14, 24);
+    doc.line(14, 27, 196, 27);
 
-// ==========================================
-// 3. GENERADOR DE REPORTES PDF AVANZADO
-// ==========================================
-document.getElementById('btn-descargar-pdf').addEventListener('click', () => {
-  const elemento = document.getElementById('bloque-historial-reportes');
-  
-  const mes = document.getElementById('filtro-mes').value || 'Completo';
-  const patente = document.getElementById('filtro-patente').value || 'General';
+    let lineaY = 35;
+    const alturaPagina = doc.internal.pageSize.height;
+    
+    // Tomamos solo las tarjetas que están visibles en la pantalla en este momento
+    const tarjetasVisibles = document.querySelectorAll('.card-reporte');
+    let contador = 0;
 
-  const opciones = {
-    margin:       [10, 10, 10, 10],
-    filename:     `Reporte_Flota_${patente.toUpperCase()}_Mes_${mes}.pdf`,
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, backgroundColor: '#0f172a', useCORS: true }, 
-    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
+    tarjetasVisibles.forEach(tarjeta => {
+        if (tarjeta.style.display === 'none') return; // Ignora los que filtraste
+        contador++;
 
-  // Corre la descarga directa aplicando los filtros visuales actuales
-  html2pdf().set(opciones).from(elemento).save();
-});
+        if (lineaY > alturaPagina - 35) {
+            doc.addPage();
+            lineaY = 20;
+        }
+
+        const infoEncabezado = tarjeta.querySelector('div').innerText.replace(/\n/g, ' | ');
+        const chofer = tarjeta.querySelector('div:nth-of-type(2)').innerText;
+        const datosKm = tarjeta.querySelector('div:nth-of-type(3)').innerText.replace(/\n/g, ' ');
+        const novedades = tarjeta.querySelector('p').innerText;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text(`${contador}. ${infoEncabezado}`, 14, lineaY);
+        lineaY += 5;
+
+        doc.setFont("helvetica", "normal");
+        doc.text(`${chofer} | ${datosKm}`, 14, lineaY);
+        lineaY += 5;
+
+        const parrafoNov = doc.splitTextToSize(novedades, 180);
+        doc.text(parrafoNov, 14, lineaY);
+        lineaY += (parrafoNov.length * 5) + 3;
+
+        doc.line(14, lineaY - 1, 196, lineaY - 1);
+        lineaY += 5;
+    });
+
+    if(contador === 0) {
+        alert("No hay registros visibles para exportar.");
+        return;
+    }
+
+    doc.save(`Reporte_General_Texto_${Date.now()}.pdf`);
+}
