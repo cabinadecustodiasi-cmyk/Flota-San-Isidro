@@ -127,59 +127,35 @@ window.cambiarVista = function(idVista) {
 
 // CARGAR LOS AUTOS REGISTRADOS
 async function cargarVehiculos() {
-    try {
-        // 1. Buscamos el contenedor donde se van a mostrar los autos
-        // Reemplazá 'contenedor-vehiculos' por el ID real que uses en tu index.html
-        const contenedor = document.getElementById('contenedor-vehiculos'); 
-        
-        if (!contenedor) {
-            console.error("Falta el contenedor HTML para los vehículos.");
-            return;
-        }
+    const contenedor = document.getElementById('lista-vehiculos');
+    if (!contenedor) return;
 
-        // 2. Traemos los datos de Supabase
-        const { data: vehiculos, error } = await supabase
-            .from('vehiculos')
-            .select('*');
+    const { data: vehiculos, error } = await supabaseClient.from('vehiculos').select('*');
 
-        if (error) throw error;
-
-        // 3. Limpiamos la pantalla antes de cargar
-        contenedor.innerHTML = '';
-
-        if (!vehiculos || vehiculos.length === 0) {
-            contenedor.innerHTML = '<p>No hay vehículos registrados.</p>';
-            return;
-        }
-
-        // 4. Recorremos los autos y los dibujamos (Acá es donde estaba el error de la línea 134 y 151)
-        vehiculos.forEach(auto => {
-            // Creamos el div de la tarjeta
-            const autoDiv = document.createElement('div');
-            autoDiv.className = 'vehiculo-item'; // Usá tu clase CSS acá
-            
-            // Le metemos el texto con los datos del auto
-            autoDiv.innerHTML = `
-                <p><strong>Patente:</strong> ${auto.patente}</p>
-                <p><strong>Marca/Modelo:</strong> ${auto.marca}</p>
-            `;
-
-            // SOLUCIÓN: Definimos y creamos el botón acá adentro para que exista
-            const botonEliminarAutoHtml = document.createElement('button');
-            botonEliminarAutoHtml.textContent = 'Eliminar';
-            botonEliminarAutoHtml.onclick = () => eliminarVehiculo(auto.id);
-
-            // Metemos el botón adentro de la tarjeta del auto
-            autoDiv.appendChild(botonEliminarAutoHtml);
-
-            // Metemos la tarjeta completa en el contenedor de la pantalla
-            contenedor.appendChild(autoDiv);
-        });
-
-    } catch (error) {
-        console.error("Error al cargar los vehículos:", error.message);
+    if (error) {
+        console.error("Error cargando autos:", error.message);
+        return;
     }
-}
+
+    contenedor.innerHTML = '';
+    vehiculos.forEach(auto => {
+        const item = document.createElement('div');
+        item.className = 'card-vehiculo';
+        
+        const rolUsuario = usuarioActual?.user_metadata?.rol || 'chofer';
+        
+        // ---> ACÁ ESTÁ LA CORRECCIÓN: Definimos la variable limpia y afuera del IF
+        let botonEliminarAutoHtml = ''; 
+        
+        if (rolUsuario === 'admin') {
+            botonEliminarAutoHtml = `
+                <button class="btn-eliminar-auto" style="position: absolute; top: 5px; right: 5px; background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px;" title="Eliminar Vehiculo">
+                    <span class="material-icons" style="font-size: 1.2rem;">delete</span>
+                </button>
+            `;
+            item.style.position = 'relative';
+        }
+
         item.innerHTML = `
             ${botonEliminarAutoHtml}
             <span class="material-icons" style="font-size: 2.5rem; color: var(--celeste); margin-top: 5px;">directions_car</span>
@@ -199,7 +175,8 @@ async function cargarVehiculos() {
             abrirPanelReporteVehiculo(auto);
         };
         contenedor.appendChild(item);
-    
+    });
+}    
 // ABRE EL REPORTE E INYECTA LOS CONTENEDORES DE DOCUMENTOS, SERVICES Y JORNADAS
 async function abrirPanelReporteVehiculo(auto) {
     vehiculoSeleccionado = auto; 
