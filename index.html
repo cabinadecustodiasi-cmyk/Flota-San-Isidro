@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flota San Isidro</title>
-    <!-- Iconos de Google -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         :root {
@@ -130,12 +129,10 @@
 </head>
 <body>
 
-    <!-- ENCABEZADO SUPERIOR -->
     <header>
         <h1 style="font-size: 1.3rem; font-weight: bold; color: var(--celeste);">Flota San Isidro</h1>
         
         <div style="display: flex; align-items: center; gap: 15px;">
-            <!-- Tu firma e identidad en la app -->
             <span style="font-size: 0.8rem; color: #64748b; font-style: italic; letter-spacing: 0.5px;">
                 Powered by <strong style="color: var(--celeste);">GabyMartin</strong>
             </span>
@@ -148,7 +145,6 @@
 
     <div class="container">
         
-        <!-- VISTA 1: LOGIN -->
         <section id="vista-login" class="vista activa">
             <div class="card">
                 <h2 style="margin-bottom: 20px; text-align: center;">Iniciar Sesión</h2>
@@ -164,15 +160,12 @@
             </div>
         </section>
 
-        <!-- VISTA 2: FLOTA (CHOFERES Y ADMINS) -->
         <section id="vista-flota" class="vista">
             <h2 style="margin-bottom: 15px;">Seleccione el Vehículo</h2>
             <div id="lista-vehiculos" class="grid-vehiculos">
-                <!-- Se carga dinámicamente con JS -->
-            </div>
+                </div>
         </section>
 
-        <!-- VISTA 3: REPORTE JORNADA -->
         <section id="vista-reporte" class="vista">
             <div class="card">
                 <h2 id="reporte-titulo" style="margin-bottom: 15px; color: var(--celeste);">Reporte de Unidad</h2>
@@ -201,7 +194,23 @@
                     </select>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" style="border: 1px dashed #334155; padding: 15px; border-radius: 8px; margin-top: 15px; background-color: #152238;">
+                    <label style="color: var(--naranja-fin); font-weight: bold; display: flex; align-items: center; gap: 6px;">
+                        <span class="material-icons" style="font-size: 1.1rem;">local_gas_station</span> ¿Cargó Combustible? (Opcional)
+                    </label>
+                    
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label style="color: var(--texto-gris);">Foto del Ticket / Comprobante</label>
+                        <input type="file" id="reporte-ticket-combustible" accept="image/*" style="padding: 5px;">
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="color: var(--texto-gris);">Monto Total Gastado ($ ARS)</label>
+                        <input type="number" id="reporte-monto-combustible" placeholder="Ej: 35000">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 15px;">
                     <label>Fotos del Perímetro / Inspección</label>
                     <input type="file" id="reporte-fotos" multiple accept="image/*" style="padding: 5px;">
                 </div>
@@ -215,9 +224,7 @@
             </div>
         </section>
 
-        <!-- VISTA 4: PANEL DE ADMINISTRACIÓN (SOLO ADMINS) -->
         <section id="vista-admin" class="vista">
-            <!-- Gestión de Autos -->
             <div class="card">
                 <h2 style="margin-bottom: 15px; color: var(--celeste);">Agregar Nuevo Vehículo</h2>
                 <div class="form-group">
@@ -231,7 +238,6 @@
                 <button class="btn" id="btn-agregar-vehiculo">Guardar Vehículo</button>
             </div>
 
-            <!-- HISTORIAL DE REPORTES E IMÁGENES -->
             <div class="card" style="background-color: #1a233a;">
                 <h3 style="color: var(--celeste); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
                     <span class="material-icons">assignment</span> Historial de Jornadas y Reportes
@@ -244,7 +250,6 @@
 
     </div>
 
-    <!-- MENÚ DE NAVEGACIÓN INFERIOR -->
     <nav id="menu-navegacion" style="display: none;">
         <button class="nav-btn activo" onclick="cambiarVista('vista-flota')">
             <span class="material-icons">directions_car</span>Flota
@@ -254,9 +259,7 @@
         </button>
     </nav>
 
-    <!-- CDN de Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Tu archivo de lógica -->
     <script src="app.js"></script>
 </body>
 </html>

@@ -355,10 +355,10 @@ async function registrarServiceVehiculo() {
 
     listaServices.unshift(nuevoService); // Lo agregamos al principio del historial
 
-    // Actualizamos la columna jsonb 'services'
+    // Actualizamos la columna jsonb 'services' de forma directa para compatibilidad nativa
     const { error } = await supabaseClient
         .from('vehiculos')
-        .update({ services: JSON.stringify(listaServices) })
+        .update({ services: listaServices })
         .eq('id', vehiculoSeleccionado.id);
 
     if (error) {
@@ -407,7 +407,7 @@ function mostrarServicesAuto() {
 }
 
 // ==========================================
-// REPORTE DE JORNADAS (CORREGIDO CON PATENTE Y CHOFER OBLIGATORIOS)
+// REPORTE DE JORNADAS (CORREGIDO ERROR ARRAY Y ADICIÓN DE TICKET)
 // ==========================================
 async function enviarReporte() {
     const tipo = document.getElementById('reporte-tipo').value;
@@ -415,6 +415,7 @@ async function enviarReporte() {
     const combustible = document.getElementById('reporte-combustible').value;
     const novedades = document.getElementById('reporte-novedades').value.trim();
     const inputFotos = document.getElementById('reporte-fotos');
+    const inputTicket = document.getElementById('reporte-ticket-combustible'); // Captura del nuevo input
 
     if (!kilometraje) {
         alert("Por favor ingrese el kilometraje actual.");
@@ -423,6 +424,7 @@ async function enviarReporte() {
 
     let urlsFotos = [];
 
+    // 1. Subida de fotos del perímetro
     if (inputFotos && inputFotos.files.length > 0) {
         for (let i = 0; i < inputFotos.files.length; i++) {
             const archivo = inputFotos.files[i];
@@ -439,16 +441,33 @@ async function enviarReporte() {
         }
     }
 
-    // CORRECCIÓN CRÍTICA: Se inyectan de forma obligatoria las columnas 'patente' y 'chofer'
+    // 2. Subida del ticket de combustible opcional
+    let urlTicket = null;
+    if (inputTicket && inputTicket.files.length > 0) {
+        const archivoTicket = inputTicket.files[0];
+        const nombreTicket = `ticket_${Date.now()}_${archivoTicket.name}`;
+
+        const { data: uploadTicketData, error: uploadTicketError } = await supabaseClient.storage
+            .from('flota')
+            .upload(nombreTicket, archivoTicket);
+
+        if (!uploadTicketError) {
+            const { data: publicTicketData } = supabaseClient.storage.from('flota').getPublicUrl(nombreTicket);
+            if (publicTicketData?.publicUrl) urlTicket = publicTicketData.publicUrl;
+        }
+    }
+
+    // CORRECCIÓN CRÍTICA: fotos_perimetro va como array nativo (sin JSON.stringify) para sanar el "malformed array literal"
     const { error } = await supabaseClient.from('reportes_jornadas').insert([{
         tipo,
         kilometraje,
         combustible,
         novedades: novedades || null,
-        fotos_perimetro: JSON.stringify(urlsFotos),
+        fotos_perimetro: urlsFotos, // REPARADO: Sin JSON.stringify
+        ticket_combustible: urlTicket, // NUEVO REGISTRO ASOCIADO
         vehiculo_id: vehiculoSeleccionado.id,
-        patente: vehiculoSeleccionado.patente, // Requerido por la base de datos
-        chofer: usuarioActual?.email || "Chofer Anónimo" // Requerido por la base de datos
+        patente: vehiculoSeleccionado.patente, 
+        chofer: usuarioActual?.email || "Chofer Anónimo" 
     }]);
 
     if (error) {
@@ -462,6 +481,7 @@ async function enviarReporte() {
         document.getElementById('reporte-km').value = '';
         document.getElementById('reporte-novedades').value = '';
         if (inputFotos) inputFotos.value = '';
+        if (inputTicket) inputTicket.value = ''; // Limpiamos el nuevo input
         cambiarVista('vista-flota');
     }
 }
@@ -580,6 +600,19 @@ async function cargarReportesParaAdmin() {
                 } catch (e) { console.error(e); }
             }
 
+            // Renderizado dinámico del Ticket de combustible para control del Administrador
+            let ticketHtml = '';
+            if (reporte.ticket_combustible) {
+                ticketHtml = `
+                    <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #334155;">
+                        <span style="font-size: 0.75rem; color: #94a3b8; display: block; margin-bottom: 4px;"><strong>Ticket de Carga Combustible:</strong></span>
+                        <a href="${reporte.ticket_combustible}" target="_blank" style="display: inline-block;">
+                            <img src="${reporte.ticket_combustible}" alt="Ticket Combustible" style="width: 75px; height: 75px; object-fit: cover; border-radius: 6px; border: 1px solid #fbbf24;">
+                        </a>
+                    </div>
+                `;
+            }
+
             tarjeta.innerHTML = `
                 <button class="btn-eliminar-reporte" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #64748b; cursor: pointer; padding: 2px;">
                     <span class="material-icons" style="font-size: 1.1rem;">delete</span>
@@ -595,6 +628,7 @@ async function cargarReportesParaAdmin() {
                 </div>
                 <p style="margin: 6px 0 0 0; font-size: 0.85rem; color: #94a3b8;"><strong>Novedades:</strong> ${reporte.novedades || 'Ninguna'}</p>
                 ${fotosHtml}
+                ${ticketHtml}
             `;
 
             tarjeta.querySelector('.btn-eliminar-reporte').addEventListener('click', () => { eliminarReporteIndividual(reporte.id); });
