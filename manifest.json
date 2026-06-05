@@ -1,0 +1,21 @@
+{
+  "short_name": "FlotaSI",
+  "name": "Flota San Isidro - Control de Unidades",
+  "icons": [
+    {
+      "src": "icono-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icono-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#0f172a",
+  "theme-color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait"
+}
