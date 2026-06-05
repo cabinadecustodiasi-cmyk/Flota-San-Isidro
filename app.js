@@ -16,6 +16,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById('btn-agregar-vehiculo').addEventListener('click', agregarVehiculo);
     document.getElementById('btn-enviar-reporte').addEventListener('click', enviarReporte);
 
+    // Conexión de filtros y PDF en tiempo real
+    const filtroPatente = document.getElementById('filtro-patente');
+    const filtroFecha = document.getElementById('filtro-fecha');
+    const filtroMes = document.getElementById('filtro-mes');
+    const btnLimpiar = document.getElementById('btn-limpiar-filtros');
+    const btnPdf = document.getElementById('btn-descargar-pdf');
+
+    if (filtroPatente) filtroPatente.addEventListener('input', filtrarReportes);
+    if (filtroFecha) filtroFecha.addEventListener('change', filtrarReportes);
+    if (filtroMes) filtroMes.addEventListener('change', filtrarReportes);
+    if (btnLimpiar) btnLimpiar.addEventListener('click', limpiarFiltros);
+    if (btnPdf) btnPdf.addEventListener('click', generarPDFAdmin);
+
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (user) {
         configurarSesionActiva(user);
@@ -123,7 +136,7 @@ async function cargarVehiculos() {
         item.className = 'card-vehiculo';
         
         const rolUsuario = usuarioActual?.user_metadata?.rol || 'chofer';
-        let botonEliminarAutoHtml = '';
+        let永久botonEliminarAutoHtml = '';
         
         if (rolUsuario === 'admin') {
             botonEliminarAutoHtml = `
@@ -156,9 +169,9 @@ async function cargarVehiculos() {
     });
 }
 
-// ABRE EL REPORTE E INYECTA LOS CONTENEDORES DE DOCUMENTOS Y SERVICES (USANDO LA ESTRUCTURA NATIVA)
+// ABRE EL REPORTE E INYECTA LOS CONTENEDORES DE DOCUMENTOS Y SERVICES
 async function abrirPanelReporteVehiculo(auto) {
-    vehiculoSeleccionado = auto; // Guardamos el objeto completo del auto activo
+    vehiculoSeleccionado = auto; 
     document.getElementById('reporte-titulo').innerText = `Reporte Unidad: ${auto.patente}`;
     
     const vistaReporte = document.getElementById('vista-reporte');
@@ -226,16 +239,13 @@ async function abrirPanelReporteVehiculo(auto) {
     }
     document.getElementById('btn-guardar-service').addEventListener('click', registrarServiceVehiculo);
 
-    // Mostrar los datos que ya contiene el objeto del vehículo
     mostrarDocumentosAuto();
     mostrarServicesAuto();
 
     cambiarVista('vista-reporte');
 }
 
-// ==========================================
-// SECCIÓN: LÓGICA DE DOCUMENTACIÓN (COLUMNA NATIVA 'documentos')
-// ==========================================
+// SECCIÓN: LÓGICA DE DOCUMENTACIÓN
 async function subirDocumentacionAuto() {
     const nombreTipo = document.getElementById('doc-nombre-tipo').value.trim();
     const archivoInput = document.getElementById('doc-archivo-file');
@@ -249,7 +259,6 @@ async function subirDocumentacionAuto() {
     const extension = file.name.split('.').pop();
     const nombreArchivoStorage = `docs_${vehiculoSeleccionado.id}_${Date.now()}.${extension}`;
 
-    // Subida al bucket 'flota'
     const { data: uploadData, error: errorUpload } = await supabaseClient.storage
         .from('flota')
         .upload(nombreArchivoStorage, file);
@@ -261,7 +270,6 @@ async function subirDocumentacionAuto() {
 
     const { data: linkPublico } = supabaseClient.storage.from('flota').getPublicUrl(nombreArchivoStorage);
 
-    // Interpretamos los documentos existentes
     let listaDocumentos = [];
     if (vehiculoSeleccionado.documentos) {
         try {
@@ -272,13 +280,11 @@ async function subirDocumentacionAuto() {
         }
     }
 
-    // Sumamos el nuevo documento al array
     listaDocumentos.push({
         nombre: nombreTipo,
         url: linkPublico.publicUrl
     });
 
-    // Guardamos la actualización en la columna 'documentos' de la tabla 'vehiculos'
     const { error: errorUpdate } = await supabaseClient
         .from('vehiculos')
         .update({ documentos: JSON.stringify(listaDocumentos) })
@@ -324,9 +330,7 @@ function mostrarDocumentosAuto() {
     });
 }
 
-// ==========================================
-// SECCIÓN: LÓGICA DE SERVICES (COLUMNA NATIVA 'services')
-// ==========================================
+// SECCIÓN: LÓGICA DE SERVICES
 async function registrarServiceVehiculo() {
     const tarea = document.getElementById('srv-tarea').value.trim();
     const km = parseInt(document.getElementById('srv-km').value);
@@ -344,7 +348,6 @@ async function registrarServiceVehiculo() {
             : (typeof vehiculoSeleccionado.services === 'string' ? JSON.parse(vehiculoSeleccionado.services) : []);
     }
 
-    // Creamos el nuevo registro
     const nuevoService = {
         tarea_realizada: tarea,
         kilometraje: km,
@@ -353,9 +356,8 @@ async function registrarServiceVehiculo() {
         fecha: new Date().toLocaleDateString('es-AR')
     };
 
-    listaServices.unshift(nuevoService); // Lo agregamos al principio del historial
+    listaServices.unshift(nuevoService);
 
-    // Actualizamos la columna jsonb 'services' de forma directa para compatibilidad nativa
     const { error } = await supabaseClient
         .from('vehiculos')
         .update({ services: listaServices })
@@ -406,16 +408,14 @@ function mostrarServicesAuto() {
     });
 }
 
-// ==========================================
-// REPORTE DE JORNADAS (CORREGIDO ERROR ARRAY Y ADICIÓN DE TICKET)
-// ==========================================
+// REPORTE DE JORNADAS
 async function enviarReporte() {
     const tipo = document.getElementById('reporte-tipo').value;
     const kilometraje = parseInt(document.getElementById('reporte-km').value);
     const combustible = document.getElementById('reporte-combustible').value;
     const novedades = document.getElementById('reporte-novedades').value.trim();
     const inputFotos = document.getElementById('reporte-fotos');
-    const inputTicket = document.getElementById('reporte-ticket-combustible'); // Captura del nuevo input
+    const inputTicket = document.getElementById('reporte-ticket-combustible');
 
     if (!kilometraje) {
         alert("Por favor ingrese el kilometraje actual.");
@@ -424,7 +424,6 @@ async function enviarReporte() {
 
     let urlsFotos = [];
 
-    // 1. Subida de fotos del perímetro
     if (inputFotos && inputFotos.files.length > 0) {
         for (let i = 0; i < inputFotos.files.length; i++) {
             const archivo = inputFotos.files[i];
@@ -441,7 +440,6 @@ async function enviarReporte() {
         }
     }
 
-    // 2. Subida del ticket de combustible opcional
     let urlTicket = null;
     if (inputTicket && inputTicket.files.length > 0) {
         const archivoTicket = inputTicket.files[0];
@@ -457,14 +455,13 @@ async function enviarReporte() {
         }
     }
 
-    // CORRECCIÓN CRÍTICA: fotos_perimetro va como array nativo (sin JSON.stringify) para sanar el "malformed array literal"
     const { error } = await supabaseClient.from('reportes_jornadas').insert([{
         tipo,
         kilometraje,
         combustible,
         novedades: novedades || null,
-        fotos_perimetro: urlsFotos, // REPARADO: Sin JSON.stringify
-        ticket_combustible: urlTicket, // NUEVO REGISTRO ASOCIADO
+        fotos_perimetro: urlsFotos, 
+        ticket_combustible: urlTicket, 
         vehiculo_id: vehiculoSeleccionado.id,
         patente: vehiculoSeleccionado.patente, 
         chofer: usuarioActual?.email || "Chofer Anónimo" 
@@ -475,13 +472,12 @@ async function enviarReporte() {
     } else {
         alert("Reporte guardado con éxito.");
         
-        // Actualizamos dinámicamente el kilometraje en la tabla vehiculos para mantener el estado real
         await supabaseClient.from('vehiculos').update({ km_actual: kilometraje }).eq('id', vehiculoSeleccionado.id);
         
         document.getElementById('reporte-km').value = '';
         document.getElementById('reporte-novedades').value = '';
         if (inputFotos) inputFotos.value = '';
-        if (inputTicket) inputTicket.value = ''; // Limpiamos el nuevo input
+        if (inputTicket) inputTicket.value = ''; 
         cambiarVista('vista-flota');
     }
 }
@@ -519,7 +515,7 @@ async function eliminarVehiculoCompleto(idVehiculo, patente) {
     if (errorVehiculo) {
         alert("Error al eliminar el vehículo: " + errorVehiculo.message);
     } else {
-        alert(`Vehículo ${patente} eliminado.`);
+        alert(`Vehículo ${patente} deleted.`);
         cargarVehiculos();
     }
 }
@@ -565,6 +561,7 @@ async function cargarReportesParaAdmin() {
 
     for (const [auto, listaDeReportes] of Object.entries(reportesAgrupados)) {
         const bloqueAuto = document.createElement('div');
+        bloqueAuto.className = 'bloque-vehiculo-grupo';
         bloqueAuto.style.cssText = "margin-bottom: 25px; border: 1px solid #334155; border-radius: 10px; padding: 15px; background-color: #111827;";
 
         bloqueAuto.innerHTML = `
@@ -579,6 +576,11 @@ async function cargarReportesParaAdmin() {
 
         listaDeReportes.forEach(reporte => {
             const tarjeta = document.createElement('div');
+            tarjeta.className = 'card-reporte';
+            const fechaISO = reporte.created_at ? reporte.created_at.split('T')[0] : '';
+            tarjeta.setAttribute('data-patente', auto.trim().toLowerCase());
+            tarjeta.setAttribute('data-fecha', fechaISO);
+
             tarjeta.style.cssText = "background-color: #1e293b; padding: 12px; border-radius: 8px; border-left: 5px solid " + (reporte.tipo === 'Inicio' ? 'var(--verde-inicio)' : 'var(--naranja-fin)') + "; position: relative;";
 
             const fechaStr = reporte.created_at ? new Date(reporte.created_at).toLocaleString('es-AR') : 'Sin fecha';
@@ -600,7 +602,6 @@ async function cargarReportesParaAdmin() {
                 } catch (e) { console.error(e); }
             }
 
-            // Renderizado dinámico del Ticket de combustible para control del Administrador
             let ticketHtml = '';
             if (reporte.ticket_combustible) {
                 ticketHtml = `
@@ -648,3 +649,82 @@ async function cerrarSesion() {
     document.getElementById('menu-navegacion').style.display = 'none';
     cambiarVista('vista-login');
 }
+
+// ==========================================
+// 1. REGISTRO DE LA PWA (INSTALABLE)
+// ==========================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('PWA lista e instalable con éxito', reg))
+      .catch(err => console.error('Error registrando Service Worker', err));
+  });
+}
+
+// ==========================================
+// 2. FILTRADO MÚLTIPLE AVANZADO EN TIEMPO REAL (ADMIN)
+// ==========================================
+const filtrarReportes = () => {
+    const patenteBuscada = document.getElementById('filtro-patente').value.toLowerCase().trim();
+    const fechaBuscada = document.getElementById('filtro-fecha').value;
+    const mesBuscado = document.getElementById('filtro-mes').value; 
+
+    const gruposVehiculos = document.querySelectorAll('.bloque-vehiculo-grupo');
+
+    gruposVehiculos.forEach(grupo => {
+        const reportes = grupo.querySelectorAll('.card-reporte');
+        let algunaTarjetaVisible = false;
+
+        reportes.forEach(reporte => {
+            const patente = reporte.getAttribute('data-patente') || '';
+            const fecha = reporte.getAttribute('data-fecha') || ''; 
+            
+            let coincide = true;
+
+            if (patenteBuscada && !patente.includes(patenteBuscada)) coincide = false;
+            if (fechaBuscada && fecha !== fechaBuscada) coincide = false;
+            if (mesBuscado && !fecha.startsWith(mesBuscado)) coincide = false;
+
+            reporte.style.display = coincide ? 'block' : 'none';
+            
+            if (coincide) {
+                algunaTarjetaVisible = true;
+            }
+        });
+
+        grupo.style.display = algunaTarjetaVisible ? 'block' : 'none';
+    });
+};
+
+const limpiarFiltros = () => {
+    document.getElementById('filtro-patente').value = '';
+    document.getElementById('filtro-fecha').value = '';
+    document.getElementById('filtro-mes').value = '';
+    filtrarReportes(); 
+};
+
+// ==========================================
+// 3. GENERADOR DE PDF PROFESIONAL
+// ==========================================
+const generarPDFAdmin = () => {
+    const elementoAExportar = document.getElementById('lista-reportes-admin');
+
+    if (!elementoAExportar || elementoAExportar.innerText.includes('No hay reportes cargados')) {
+        alert("No hay reportes disponibles en pantalla para exportar.");
+        return;
+    }
+
+    const opciones = {
+        margin:       12,
+        filename:     `Reporte_Flota_${new Date().toISOString().slice(0,10)}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { 
+            scale: 2, 
+            useCORS: true, 
+            backgroundColor: '#111827' 
+        },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opciones).from(elementoAExportar).save();
+};
