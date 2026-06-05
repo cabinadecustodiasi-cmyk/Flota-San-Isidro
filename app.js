@@ -1,8 +1,3 @@
-// Herramienta de diagnóstico para el celular
-window.onerror = function(message, source, lineno, colno, error) {
-    alert("¡Error de JS en el celu!\n\n" + message + "\n\nLínea: " + lineno);
-    return false;
-};
 // CONFIGURACIÓN DE SUPABASE REAL Y VERIFICADA
 const SUPABASE_URL = "https://toqauhxdcyggnsejjijk.supabase.co"; 
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvcWF1aHhkY3lnZ25zZWpqaWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDU4MzQsImV4cCI6MjA5NjA4MTgzNH0.Eb2u6O10ulBv20OoKvwaE64aqwEQzU80GnkbNd8Tp0I"; 
@@ -20,19 +15,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
     document.getElementById('btn-agregar-vehiculo').addEventListener('click', agregarVehiculo);
     document.getElementById('btn-enviar-reporte').addEventListener('click', enviarReporte);
-
-    // Conexión de filtros y PDF en tiempo real
-    const filtroPatente = document.getElementById('filtro-patente');
-    const filtroFecha = document.getElementById('filtro-fecha');
-    const filtroMes = document.getElementById('filtro-mes');
-    const btnLimpiar = document.getElementById('btn-limpiar-filtros');
-    const btnPdf = document.getElementById('btn-descargar-pdf');
-
-    if (filtroPatente) filtroPatente.addEventListener('input', filtrarReportes);
-    if (filtroFecha) filtroFecha.addEventListener('change', filtrarReportes);
-    if (filtroMes) filtroMes.addEventListener('change', filtrarReportes);
-    if (btnLimpiar) btnLimpiar.addEventListener('click', limpiarFiltros);
-    if (btnPdf) btnPdf.addEventListener('click', generarPDFAdmin);
 
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (user) {
@@ -141,7 +123,7 @@ async function cargarVehiculos() {
         item.className = 'card-vehiculo';
         
         const rolUsuario = usuarioActual?.user_metadata?.rol || 'chofer';
-        let永久botonEliminarAutoHtml = '';
+        let botonEliminarAutoHtml = '';
         
         if (rolUsuario === 'admin') {
             botonEliminarAutoHtml = `
@@ -174,9 +156,9 @@ async function cargarVehiculos() {
     });
 }
 
-// ABRE EL REPORTE E INYECTA LOS CONTENEDORES DE DOCUMENTOS Y SERVICES
+// ABRE EL REPORTE E INYECTA LOS CONTENEDORES DE DOCUMENTOS Y SERVICES (USANDO LA ESTRUCTURA NATIVA)
 async function abrirPanelReporteVehiculo(auto) {
-    vehiculoSeleccionado = auto; 
+    vehiculoSeleccionado = auto; // Guardamos el objeto completo del auto activo
     document.getElementById('reporte-titulo').innerText = `Reporte Unidad: ${auto.patente}`;
     
     const vistaReporte = document.getElementById('vista-reporte');
@@ -229,7 +211,7 @@ async function abrirPanelReporteVehiculo(auto) {
                     <input type="text" id="srv-tarea" placeholder="Ej: Cambio Aceite y Filtros" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
                     <input type="number" id="srv-km" placeholder="Kilometraje del Service" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
                 </div>
-                <input type="text" id="srv-notas" placeholder="Observaciones o taller (Opcional)" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
+                <input type="text" id="srv-notes" id="srv-notas" placeholder="Observaciones o taller (Opcional)" style="padding: 6px; border-radius: 4px; border: 1px solid #475569; background: #1f2937; color:#fff; font-size: 0.85rem;">
                 <button id="btn-guardar-service" style="background: #10b981; color: #fff; border: none; padding: 6px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.85rem;">Guardar Registro de Taller</button>
             </div>
 
@@ -244,13 +226,16 @@ async function abrirPanelReporteVehiculo(auto) {
     }
     document.getElementById('btn-guardar-service').addEventListener('click', registrarServiceVehiculo);
 
+    // Mostrar los datos que ya contiene el objeto del vehículo
     mostrarDocumentosAuto();
     mostrarServicesAuto();
 
     cambiarVista('vista-reporte');
 }
 
-// SECCIÓN: LÓGICA DE DOCUMENTACIÓN
+// ==========================================
+// SECCIÓN: LÓGICA DE DOCUMENTACIÓN (COLUMNA NATIVA 'documentos')
+// ==========================================
 async function subirDocumentacionAuto() {
     const nombreTipo = document.getElementById('doc-nombre-tipo').value.trim();
     const archivoInput = document.getElementById('doc-archivo-file');
@@ -264,6 +249,7 @@ async function subirDocumentacionAuto() {
     const extension = file.name.split('.').pop();
     const nombreArchivoStorage = `docs_${vehiculoSeleccionado.id}_${Date.now()}.${extension}`;
 
+    // Subida al bucket 'flota'
     const { data: uploadData, error: errorUpload } = await supabaseClient.storage
         .from('flota')
         .upload(nombreArchivoStorage, file);
@@ -275,6 +261,7 @@ async function subirDocumentacionAuto() {
 
     const { data: linkPublico } = supabaseClient.storage.from('flota').getPublicUrl(nombreArchivoStorage);
 
+    // Interpretamos los documentos existentes
     let listaDocumentos = [];
     if (vehiculoSeleccionado.documentos) {
         try {
@@ -285,11 +272,13 @@ async function subirDocumentacionAuto() {
         }
     }
 
+    // Sumamos el nuevo documento al array
     listaDocumentos.push({
         nombre: nombreTipo,
         url: linkPublico.publicUrl
     });
 
+    // Guardamos la actualización en la columna 'documentos' de la tabla 'vehiculos'
     const { error: errorUpdate } = await supabaseClient
         .from('vehiculos')
         .update({ documentos: JSON.stringify(listaDocumentos) })
@@ -335,7 +324,9 @@ function mostrarDocumentosAuto() {
     });
 }
 
-// SECCIÓN: LÓGICA DE SERVICES
+// ==========================================
+// SECCIÓN: LÓGICA DE SERVICES (COLUMNA NATIVA 'services')
+// ==========================================
 async function registrarServiceVehiculo() {
     const tarea = document.getElementById('srv-tarea').value.trim();
     const km = parseInt(document.getElementById('srv-km').value);
@@ -353,6 +344,7 @@ async function registrarServiceVehiculo() {
             : (typeof vehiculoSeleccionado.services === 'string' ? JSON.parse(vehiculoSeleccionado.services) : []);
     }
 
+    // Creamos el nuevo registro
     const nuevoService = {
         tarea_realizada: tarea,
         kilometraje: km,
@@ -361,8 +353,9 @@ async function registrarServiceVehiculo() {
         fecha: new Date().toLocaleDateString('es-AR')
     };
 
-    listaServices.unshift(nuevoService);
+    listaServices.unshift(nuevoService); // Lo agregamos al principio del historial
 
+    // Actualizamos la columna jsonb 'services' de forma directa para compatibilidad nativa
     const { error } = await supabaseClient
         .from('vehiculos')
         .update({ services: listaServices })
@@ -413,14 +406,16 @@ function mostrarServicesAuto() {
     });
 }
 
-// REPORTE DE JORNADAS
+// ==========================================
+// REPORTE DE JORNADAS (CORREGIDO ERROR ARRAY Y ADICIÓN DE TICKET)
+// ==========================================
 async function enviarReporte() {
     const tipo = document.getElementById('reporte-tipo').value;
     const kilometraje = parseInt(document.getElementById('reporte-km').value);
     const combustible = document.getElementById('reporte-combustible').value;
     const novedades = document.getElementById('reporte-novedades').value.trim();
     const inputFotos = document.getElementById('reporte-fotos');
-    const inputTicket = document.getElementById('reporte-ticket-combustible');
+    const inputTicket = document.getElementById('reporte-ticket-combustible'); // Captura del nuevo input
 
     if (!kilometraje) {
         alert("Por favor ingrese el kilometraje actual.");
@@ -429,6 +424,7 @@ async function enviarReporte() {
 
     let urlsFotos = [];
 
+    // 1. Subida de fotos del perímetro
     if (inputFotos && inputFotos.files.length > 0) {
         for (let i = 0; i < inputFotos.files.length; i++) {
             const archivo = inputFotos.files[i];
@@ -445,6 +441,7 @@ async function enviarReporte() {
         }
     }
 
+    // 2. Subida del ticket de combustible opcional
     let urlTicket = null;
     if (inputTicket && inputTicket.files.length > 0) {
         const archivoTicket = inputTicket.files[0];
@@ -460,13 +457,14 @@ async function enviarReporte() {
         }
     }
 
+    // CORRECCIÓN CRÍTICA: fotos_perimetro va como array nativo (sin JSON.stringify) para sanar el "malformed array literal"
     const { error } = await supabaseClient.from('reportes_jornadas').insert([{
         tipo,
         kilometraje,
         combustible,
         novedades: novedades || null,
-        fotos_perimetro: urlsFotos, 
-        ticket_combustible: urlTicket, 
+        fotos_perimetro: urlsFotos, // REPARADO: Sin JSON.stringify
+        ticket_combustible: urlTicket, // NUEVO REGISTRO ASOCIADO
         vehiculo_id: vehiculoSeleccionado.id,
         patente: vehiculoSeleccionado.patente, 
         chofer: usuarioActual?.email || "Chofer Anónimo" 
@@ -477,12 +475,13 @@ async function enviarReporte() {
     } else {
         alert("Reporte guardado con éxito.");
         
+        // Actualizamos dinámicamente el kilometraje en la tabla vehiculos para mantener el estado real
         await supabaseClient.from('vehiculos').update({ km_actual: kilometraje }).eq('id', vehiculoSeleccionado.id);
         
         document.getElementById('reporte-km').value = '';
         document.getElementById('reporte-novedades').value = '';
         if (inputFotos) inputFotos.value = '';
-        if (inputTicket) inputTicket.value = ''; 
+        if (inputTicket) inputTicket.value = ''; // Limpiamos el nuevo input
         cambiarVista('vista-flota');
     }
 }
@@ -520,7 +519,7 @@ async function eliminarVehiculoCompleto(idVehiculo, patente) {
     if (errorVehiculo) {
         alert("Error al eliminar el vehículo: " + errorVehiculo.message);
     } else {
-        alert(`Vehículo ${patente} deleted.`);
+        alert(`Vehículo ${patente} eliminado.`);
         cargarVehiculos();
     }
 }
@@ -566,6 +565,7 @@ async function cargarReportesParaAdmin() {
 
     for (const [auto, listaDeReportes] of Object.entries(reportesAgrupados)) {
         const bloqueAuto = document.createElement('div');
+        // Agregamos una clase al contenedor del auto para poder ocultarlo de forma elegante si no hay coincidencias
         bloqueAuto.className = 'bloque-vehiculo-grupo';
         bloqueAuto.style.cssText = "margin-bottom: 25px; border: 1px solid #334155; border-radius: 10px; padding: 15px; background-color: #111827;";
 
@@ -581,6 +581,8 @@ async function cargarReportesParaAdmin() {
 
         listaDeReportes.forEach(reporte => {
             const tarjeta = document.createElement('div');
+            
+            // SOLUCIÓN AL CONSEJO: Vinculamos la clase y los datos para el buscador dinámico
             tarjeta.className = 'card-reporte';
             const fechaISO = reporte.created_at ? reporte.created_at.split('T')[0] : '';
             tarjeta.setAttribute('data-patente', auto.trim().toLowerCase());
@@ -667,69 +669,71 @@ if ('serviceWorker' in navigator) {
 }
 
 // ==========================================
-// 2. FILTRADO MÚLTIPLE AVANZADO EN TIEMPO REAL (ADMIN)
+// 2. FILTRADO MULTIPLE AVANZADO EN TIEMPO REAL (ADMIN)
 // ==========================================
 const filtrarReportes = () => {
-    const patenteBuscada = document.getElementById('filtro-patente').value.toLowerCase().trim();
-    const fechaBuscada = document.getElementById('filtro-fecha').value;
-    const mesBuscado = document.getElementById('filtro-mes').value; 
+  const patenteBuscada = document.getElementById('filtro-patente').value.toLowerCase().trim();
+  const fechaBuscada = document.getElementById('filtro-fecha').value;
+  const mesBuscado = document.getElementById('filtro-mes').value; // Retorna "YYYY-MM"
 
-    const gruposVehiculos = document.querySelectorAll('.bloque-vehiculo-grupo');
+  // Seleccionamos cada bloque agrupado por auto
+  const gruposVehiculos = document.querySelectorAll('.bloque-vehiculo-grupo');
 
-    gruposVehiculos.forEach(grupo => {
-        const reportes = grupo.querySelectorAll('.card-reporte');
-        let algunaTarjetaVisible = false;
+  gruposVehiculos.forEach(grupo => {
+    const reportes = grupo.querySelectorAll('.card-reporte');
+    let algunaTarjetaVisible = false;
 
-        reportes.forEach(reporte => {
-            const patente = reporte.getAttribute('data-patente') || '';
-            const fecha = reporte.getAttribute('data-fecha') || ''; 
-            
-            let coincide = true;
+    reportes.forEach(reporte => {
+      const patente = reporte.getAttribute('data-patente') || '';
+      const fecha = reporte.getAttribute('data-fecha') || ''; // "YYYY-MM-DD"
+      
+      let coincide = true;
 
-            if (patenteBuscada && !patente.includes(patenteBuscada)) coincide = false;
-            if (fechaBuscada && fecha !== fechaBuscada) coincide = false;
-            if (mesBuscado && !fecha.startsWith(mesBuscado)) coincide = false;
+      if (patenteBuscada && !patente.includes(patenteBuscada)) coincide = false;
+      if (fechaBuscada && fecha !== fechaBuscada) coincide = false;
+      if (mesBuscado && !fecha.startsWith(mesBuscado)) coincide = false;
 
-            reporte.style.display = coincide ? 'block' : 'none';
-            
-            if (coincide) {
-                algunaTarjetaVisible = true;
-            }
-        });
-
-        grupo.style.display = algunaTarjetaVisible ? 'block' : 'none';
+      reporte.style.display = coincide ? 'block' : 'none';
+      
+      if (coincide) {
+        algunaTarjetaVisible = true;
+      }
     });
+
+    // Si ninguna tarjeta de este auto coincide, ocultamos el bloque entero (recuadro y título)
+    grupo.style.display = algunaTarjetaVisible ? 'block' : 'none';
+  });
 };
 
-const limpiarFiltros = () => {
-    document.getElementById('filtro-patente').value = '';
-    document.getElementById('filtro-fecha').value = '';
-    document.getElementById('filtro-mes').value = '';
-    filtrarReportes(); 
-};
+// Escuchas de eventos para filtrar dinámicamente mientras se escribe o selecciona
+document.getElementById('filtro-patente').addEventListener('input', filtrarReportes);
+document.getElementById('filtro-fecha').addEventListener('change', filtrarReportes);
+document.getElementById('filtro-mes').addEventListener('change', filtrarReportes);
+
+document.getElementById('btn-limpiar-filtros').addEventListener('click', () => {
+  document.getElementById('filtro-patente').value = '';
+  document.getElementById('filtro-fecha').value = '';
+  document.getElementById('filtro-mes').value = '';
+  filtrarReportes();
+});
 
 // ==========================================
-// 3. GENERADOR DE PDF PROFESIONAL
+// 3. GENERADOR DE REPORTES PDF AVANZADO
 // ==========================================
-const generarPDFAdmin = () => {
-    const elementoAExportar = document.getElementById('lista-reportes-admin');
+document.getElementById('btn-descargar-pdf').addEventListener('click', () => {
+  const elemento = document.getElementById('bloque-historial-reportes');
+  
+  const mes = document.getElementById('filtro-mes').value || 'Completo';
+  const patente = document.getElementById('filtro-patente').value || 'General';
 
-    if (!elementoAExportar || elementoAExportar.innerText.includes('No hay reportes cargados')) {
-        alert("No hay reportes disponibles en pantalla para exportar.");
-        return;
-    }
+  const opciones = {
+    margin:       [10, 10, 10, 10],
+    filename:     `Reporte_Flota_${patente.toUpperCase()}_Mes_${mes}.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, backgroundColor: '#0f172a', useCORS: true }, 
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
 
-    const opciones = {
-        margin:       12,
-        filename:     `Reporte_Flota_${new Date().toISOString().slice(0,10)}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { 
-            scale: 2, 
-            useCORS: true, 
-            backgroundColor: '#111827' 
-        },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-
-    html2pdf().set(opciones).from(elementoAExportar).save();
-};
+  // Corre la descarga directa aplicando los filtros visuales actuales
+  html2pdf().set(opciones).from(elemento).save();
+});
