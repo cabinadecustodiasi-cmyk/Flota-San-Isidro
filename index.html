@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flota San Isidro</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icono-192.png">
+
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         :root {
@@ -125,6 +132,14 @@
             border-color: var(--celeste);
             background-color: #1e3a8a;
         }
+
+        /* Estilos específicos para impresión directa */
+        @media print {
+            body { background: white; color: black; padding-bottom: 0; }
+            nav, header, button, .btn, #vista-admin > div:first-child, .filtro-contenedor { display: none !important; }
+            .card { background: white; color: black; box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
+            label { color: #000; font-weight: bold; }
+        }
     </style>
 </head>
 <body>
@@ -238,7 +253,35 @@
                 <button class="btn" id="btn-agregar-vehiculo">Guardar Vehículo</button>
             </div>
 
-            <div class="card" style="background-color: #1a233a;">
+            <div class="card filtro-contenedor" style="background-color: #111e36; border: 1px solid #1e293b;">
+                <h3 style="color: var(--celeste); margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                    <span class="material-icons">search</span> Buscador y Herramientas de Archivo
+                </h3>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 0.8rem;">Vehículo / Patente</label>
+                        <input type="text" id="filtro-patente" placeholder="Ej: ABC-123">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 0.8rem;">Fecha Específica</label>
+                        <input type="date" id="filtro-fecha">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 0.8rem;">Filtrar por Mes</label>
+                        <input type="month" id="filtro-mes">
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn" id="btn-limpiar-filtros" style="background-color: #334155; color: white; padding: 10px;">Limpiar</button>
+                    <button class="btn" id="btn-descargar-pdf" style="background-color: var(--verde-inicio); color: white; padding: 10px; gap: 4px;">
+                        <span class="material-icons" style="font-size: 1.2rem;">picture_as_pdf</span> Guardar PDF
+                    </button>
+                </div>
+            </div>
+
+            <div class="card" style="background-color: #1a233a;" id="bloque-historial-reportes">
                 <h3 style="color: var(--celeste); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
                     <span class="material-icons">assignment</span> Historial de Jornadas y Reportes
                 </h3>
@@ -260,6 +303,9 @@
     </nav>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
     <script src="app.js"></script>
 </body>
 </html>
